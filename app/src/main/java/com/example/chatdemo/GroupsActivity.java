@@ -1,11 +1,8 @@
 package com.example.chatdemo;
 
 import android.app.Dialog;
-import android.graphics.Color;
-import android.graphics.drawable.ColorDrawable;
+import android.app.ProgressDialog;
 import android.os.Bundle;
-import android.util.DisplayMetrics;
-import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.TextView;
@@ -20,8 +17,13 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.example.chatdemo.model.Group;
 import com.example.chatdemo.model.User;
 import com.google.android.material.button.MaterialButton;
+import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.List;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
+import android.view.Gravity;
+import android.view.WindowManager;
 
 public class GroupsActivity extends AppCompatActivity implements GroupsAdapter.OnGroupClickListener {
 
@@ -30,10 +32,12 @@ public class GroupsActivity extends AppCompatActivity implements GroupsAdapter.O
     private GroupsAdapter groupsAdapter;
     private List<Group> groupList;
     private DatabaseHelper databaseHelper;
+    private ApiService apiService;
+    private ProgressDialog progressDialog;
 
-    // Host credentials
+    // Host information
     private static final String HOST_USERNAME = "host1";
-    private static final String HOST_AUTH_TOKEN = "vS3cX3YvVtic8C-0Thl612xVYe6fZuQMn44qJGIFJP2";
+    private static final String HOST_PASSWORD = "Demo@123";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -56,6 +60,7 @@ public class GroupsActivity extends AppCompatActivity implements GroupsAdapter.O
         btnBack = findViewById(R.id.btnBack);
 
         databaseHelper = new DatabaseHelper(this);
+        apiService = ApiService.getInstance(this);
 
         btnBack.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -106,7 +111,6 @@ public class GroupsActivity extends AppCompatActivity implements GroupsAdapter.O
         // 🌟 End of essential part 🌟
 
         TextView tvDialogTitle = dialog.findViewById(R.id.tvDialogTitle);
-        // ... (rest of your existing view initializations)
         TextView tvHostName = dialog.findViewById(R.id.tvHostName);
         View cardHost = dialog.findViewById(R.id.cardHost);
         RecyclerView rvGroupUsers = dialog.findViewById(R.id.rvGroupUsers);
@@ -169,41 +173,112 @@ public class GroupsActivity extends AppCompatActivity implements GroupsAdapter.O
     }
 
     private void launchGroupChatAsHost(Group group) {
-        String groupName = group.getGroupName();
-        String token = HOST_AUTH_TOKEN;
+        showProgressDialog("Logging in as host...");
 
-        if (groupName == null || groupName.isEmpty()) {
-            Toast.makeText(this, "No group name available", Toast.LENGTH_SHORT).show();
-            return;
-        }
+        apiService.loginUser(HOST_USERNAME, HOST_PASSWORD, new ApiCallback<JSONObject>() {
+            @Override
+            public void onSuccess(JSONObject response) {
+                hideProgressDialog();
+                try {
+                    if (response.getBoolean("success")) {
+                        // Get fresh host token from login response
+                        String hostToken = response.getJSONObject("data").getString("authToken");
+                        String groupName = group.getGroupName();
 
-        // Use group name instead of room ID for group chats
-        ChatUtil.launchGroupChat(this, groupName, token);
-        Toast.makeText(this, "Joining as Host", Toast.LENGTH_SHORT).show();
+                        if (groupName == null || groupName.isEmpty()) {
+                            Toast.makeText(GroupsActivity.this, "No group name available", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+
+                        // Launch group chat with fresh host token
+                        ChatUtil.launchGroupChat(GroupsActivity.this, groupName, hostToken);
+                        Toast.makeText(GroupsActivity.this, "Joining as Host", Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(GroupsActivity.this, "Host login failed", Toast.LENGTH_SHORT).show();
+                    }
+                } catch (Exception e) {
+                    Toast.makeText(GroupsActivity.this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onError(String errorMessage) {
+                hideProgressDialog();
+                Toast.makeText(GroupsActivity.this, "Host login error: " + errorMessage, Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     private void launchGroupChatAsUser(Group group, User user) {
-        String groupName = group.getGroupName();
-        String token = user.getToken();
+        showProgressDialog("Logging in as " + user.getUsername() + "...");
 
-        if (groupName == null || groupName.isEmpty()) {
-            Toast.makeText(this, "No group name available", Toast.LENGTH_SHORT).show();
-            return;
+        String password = "Demo@123"; // Constant password for all guest users
+
+        apiService.loginUser(user.getUsername(), password, new ApiCallback<JSONObject>() {
+            @Override
+            public void onSuccess(JSONObject response) {
+                hideProgressDialog();
+                try {
+                    if (response.getBoolean("success")) {
+                        // Get fresh user token from login response
+                        String userToken = response.getJSONObject("data").getString("authToken");
+                        String groupName = group.getGroupName();
+
+                        if (groupName == null || groupName.isEmpty()) {
+                            Toast.makeText(GroupsActivity.this, "No group name available", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+
+                        // Launch group chat with fresh user token
+                        ChatUtil.launchGroupChat(GroupsActivity.this, groupName, userToken);
+                        Toast.makeText(GroupsActivity.this, "Joining as " + user.getUsername(), Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(GroupsActivity.this, "Login failed for " + user.getUsername(), Toast.LENGTH_SHORT).show();
+                    }
+                } catch (Exception e) {
+                    Toast.makeText(GroupsActivity.this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onError(String errorMessage) {
+                hideProgressDialog();
+                Toast.makeText(GroupsActivity.this, "Login error: " + errorMessage, Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void showProgressDialog(String message) {
+        if (progressDialog != null && progressDialog.isShowing()) {
+            progressDialog.dismiss();
         }
+        progressDialog = new ProgressDialog(this);
+        progressDialog.setMessage(message);
+        progressDialog.setCancelable(false);
+        progressDialog.show();
+    }
 
-        if (token == null || token.isEmpty()) {
-            Toast.makeText(this, "No token available for " + user.getUsername(), Toast.LENGTH_SHORT).show();
-            return;
+    private void hideProgressDialog() {
+        if (progressDialog != null && progressDialog.isShowing()) {
+            progressDialog.dismiss();
         }
-
-        // Use group name instead of room ID for group chats
-        ChatUtil.launchGroupChat(this, groupName, token);
-        Toast.makeText(this, "Joining as " + user.getUsername(), Toast.LENGTH_SHORT).show();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
         loadGroupsFromDatabase(); // Refresh groups when returning to activity
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (databaseHelper != null) {
+            databaseHelper.close();
+        }
+        if (apiService != null) {
+            apiService.cancelAllRequests();
+        }
+        hideProgressDialog();
     }
 }

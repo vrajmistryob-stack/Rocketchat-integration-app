@@ -1,35 +1,29 @@
 package com.example.chatdemo;
 
+import android.app.ProgressDialog;
+import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Toast;
-
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
-
 import com.example.chatdemo.model.User;
 import com.google.android.material.button.MaterialButton;
-
+import org.json.JSONObject;
 import java.util.List;
 
 public class UsersAdapter extends RecyclerView.Adapter<UsersAdapter.UserViewHolder> {
 
     private List<User> userList;
-    private OnUserChatListener chatListener;
+    private Context context;
+    private ProgressDialog progressDialog;
+    private ApiService apiService;
 
-    public interface OnUserChatListener {
-        void onUserChatClick(User user);
-        void onChatError(String errorMessage);
-    }
-
-    public UsersAdapter(List<User> userList) {
+    public UsersAdapter(List<User> userList, Context context) {
         this.userList = userList;
-    }
-
-    public UsersAdapter(List<User> userList, OnUserChatListener chatListener) {
-        this.userList = userList;
-        this.chatListener = chatListener;
+        this.context = context;
+        this.apiService = ApiService.getInstance(context);
     }
 
     @NonNull
@@ -45,20 +39,13 @@ public class UsersAdapter extends RecyclerView.Adapter<UsersAdapter.UserViewHold
         User user = userList.get(position);
         holder.btnUser.setText(user.getUsername());
 
-        // Set click listener for the button
+        // Set click listener that will login before opening chat
         holder.btnUser.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (chatListener != null) {
-                    chatListener.onUserChatClick(user);
-                } else {
-                    launchChatForUser(user, v);
-                }
+                launchChatWithFreshToken(user);
             }
         });
-
-        // Optional: Change button appearance based on chat availability
-        updateButtonAppearance(holder.btnUser, user);
     }
 
     @Override
@@ -71,65 +58,61 @@ public class UsersAdapter extends RecyclerView.Adapter<UsersAdapter.UserViewHold
         notifyDataSetChanged();
     }
 
-    private void launchChatForUser(User user, View view) {
-        String roomId = user.getHostRoomId();
-        String token = user.getToken();
+    private void launchChatWithFreshToken(User user) {
+        showProgressDialog("Logging in as " + user.getUsername() + "...");
 
-        // Validate roomId and token
-        if (roomId == null || roomId.isEmpty()) {
-            Toast.makeText(view.getContext(),
-                    "No chat room available for " + user.getUsername(),
-                    Toast.LENGTH_SHORT).show();
-            return;
-        }
+        String password = "Demo@123"; // Constant password for all guest users
 
-        if (token == null || token.isEmpty()) {
-            Toast.makeText(view.getContext(),
-                    "Authentication token not available for " + user.getUsername(),
-                    Toast.LENGTH_SHORT).show();
-            return;
-        }
+        apiService.loginUser(user.getUsername(), password, new ApiCallback<JSONObject>() {
+            @Override
+            public void onSuccess(JSONObject response) {
+                hideProgressDialog();
+                try {
+                    if (response.getBoolean("success")) {
+                        // Get fresh token from login response
+                        String userToken = response.getJSONObject("data").getString("authToken");
+                        String roomId = user.getHostRoomId();
 
-        // Launch direct chat using guest user's own token
-        ChatUtil.launchDirectChat(view.getContext(), roomId, token);
+                        // Validate roomId
+                        if (roomId == null || roomId.isEmpty()) {
+                            Toast.makeText(context, "No chat room available for " + user.getUsername(), Toast.LENGTH_SHORT).show();
+                            return;
+                        }
 
-        // Show confirmation
-        Toast.makeText(view.getContext(),
-                "Opening chat as " + user.getUsername(),
-                Toast.LENGTH_SHORT).show();
+                        // Launch direct chat with fresh token
+                        ChatUtil.launchDirectChat(context, roomId, userToken);
+                        Toast.makeText(context, "Opening chat as " + user.getUsername(), Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(context, "Login failed for " + user.getUsername(), Toast.LENGTH_SHORT).show();
+                    }
+                } catch (Exception e) {
+                    Toast.makeText(context, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onError(String errorMessage) {
+                hideProgressDialog();
+                Toast.makeText(context, "Login error: " + errorMessage, Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
-    private boolean isChatAvailable(User user) {
-        return user.getHostRoomId() != null && !user.getHostRoomId().isEmpty() &&
-                user.getToken() != null && !user.getToken().isEmpty();
-    }
-
-    private void showChatNotAvailableError(User user, View view) {
-        StringBuilder errorMessage = new StringBuilder();
-        errorMessage.append("Cannot open chat for ").append(user.getUsername());
-
-        if (user.getHostRoomId() == null || user.getHostRoomId().isEmpty()) {
-            errorMessage.append(" - No room available");
-        } else if (user.getToken() == null || user.getToken().isEmpty()) {
-            errorMessage.append(" - Missing authentication");
+    private void showProgressDialog(String message) {
+        // Dismiss existing dialog if showing
+        if (progressDialog != null && progressDialog.isShowing()) {
+            progressDialog.dismiss();
         }
 
-        Toast.makeText(view.getContext(), errorMessage.toString(), Toast.LENGTH_LONG).show();
-
-        if (chatListener != null) {
-            chatListener.onChatError(errorMessage.toString());
-        }
+        progressDialog = new ProgressDialog(context);
+        progressDialog.setMessage(message);
+        progressDialog.setCancelable(false);
+        progressDialog.show();
     }
 
-    private void updateButtonAppearance(MaterialButton button, User user) {
-        if (isChatAvailable(user)) {
-            // Chat is available - normal appearance
-            button.setAlpha(1.0f);
-            button.setEnabled(true);
-        } else {
-            // Chat not available - visually disabled
-            button.setAlpha(0.6f);
-            button.setEnabled(true); // Still clickable to show error message
+    private void hideProgressDialog() {
+        if (progressDialog != null && progressDialog.isShowing()) {
+            progressDialog.dismiss();
         }
     }
 

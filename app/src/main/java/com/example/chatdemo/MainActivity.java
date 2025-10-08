@@ -12,14 +12,22 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+
+import com.android.volley.Request;
+import com.android.volley.RequestQueue;
+import com.android.volley.Response;
+import com.android.volley.VolleyError;
+import com.android.volley.toolbox.JsonObjectRequest;
+import com.android.volley.toolbox.Volley;
 import com.example.chatdemo.model.CreateRoomResponse;
 import com.example.chatdemo.model.CreateUserResponse;
 import com.example.chatdemo.model.User;
 import com.google.android.material.button.MaterialButton;
-import org.json.JSONException;
 import org.json.JSONObject;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class MainActivity extends AppCompatActivity {
     private MaterialButton btnAddGuest, btnHost, btnGroups;
@@ -29,6 +37,18 @@ public class MainActivity extends AppCompatActivity {
     private DatabaseHelper databaseHelper;
     private ApiService apiService;
     private ProgressDialog progressDialog;
+
+    // API Configuration
+    private static final String BASE_URL = "http://192.168.0.112:3000/";
+    private static final String CREATE_USER_URL = BASE_URL + "api/v1/users.create";
+    private static final String CREATE_ROOM_URL = BASE_URL + "api/v1/dm.create";
+    private static final String LOGIN_URL = BASE_URL + "api/v1/login";
+
+    // Host credentials
+    private static final String HOST_AUTH_TOKEN = "7LGO3EMJtAdVSbujIh15XVBWEyagG4eWlm0DaQyNRoY";
+    private static final String HOST_USER_ID = "BqF9ZQW49PwY4dpZL";
+    private static final String ADMIN_AUTH_TOKEN = "SaXIXh2Jgxhwp0mIZk-J4FOUA13pGQFIe5uZ5jtNd7Z";
+    private static final String ADMIN_USER_ID = "MJncAdb5FYSoM4fjs";
 
     private int guestCounter = 1;
 
@@ -52,7 +72,7 @@ public class MainActivity extends AppCompatActivity {
     private void initializeViews() {
         btnAddGuest = findViewById(R.id.btn_addguest);
         btnHost = findViewById(R.id.btn_host);
-        btnGroups =findViewById(R.id.btn_groups);
+        btnGroups = findViewById(R.id.btn_groups);
         rvGuests = findViewById(R.id.rv_guests);
 
         databaseHelper = new DatabaseHelper(this);
@@ -72,6 +92,7 @@ public class MainActivity extends AppCompatActivity {
                 startActivity(intent);
             }
         });
+
         btnGroups.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -83,7 +104,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void setupRecyclerView() {
         guestList = new ArrayList<>();
-        usersAdapter = new UsersAdapter(guestList);
+        usersAdapter = new UsersAdapter(guestList, this); // Pass context for login
         rvGuests.setLayoutManager(new LinearLayoutManager(this));
         rvGuests.setAdapter(usersAdapter);
     }
@@ -120,46 +141,109 @@ public class MainActivity extends AppCompatActivity {
         String username = "guest" + guestCounter;
         String email = "guest" + guestCounter + "@gmail.com";
         String password = "Demo@123";
-        String name = username;
 
-        // Step 1: Create user using ApiService
-        apiService.createUser(name, email, password, username, new ApiCallback<CreateUserResponse>() {
+        // Step 1: Create user
+        createUser(username, email, password);
+    }
+
+    private void createUser(String username, String email, String password) {
+        JSONObject requestBody = new JSONObject();
+        try {
+            requestBody.put("name", username);
+            requestBody.put("email", email);
+            requestBody.put("password", password);
+            requestBody.put("username", username);
+        } catch (Exception e) {
+            e.printStackTrace();
+            hideProgressDialog();
+            return;
+        }
+
+        JsonObjectRequest createUserRequest = new JsonObjectRequest(
+                Request.Method.POST,
+                CREATE_USER_URL,
+                requestBody,
+                new Response.Listener<JSONObject>() {
+                    @Override
+                    public void onResponse(JSONObject response) {
+                        try {
+                            if (response.getBoolean("success")) {
+                                JSONObject userObject = response.getJSONObject("user");
+                                String userId = userObject.getString("_id");
+                                String createdUsername = userObject.getString("username");
+
+                                // Step 2: Login with the new user to create room
+                                loginUserForRoomCreation(createdUsername, password, userId, email);
+                            } else {
+                                // User creation failed - check if it's because username already exists
+                                String errorType = response.optString("errorType", "");
+                                String error = response.optString("error", "");
+
+                                if (errorType.equals("error-field-unavailable") ||
+                                        error.contains("already in use")) {
+                                    // Username already exists - try to login instead
+                                    updateProgressDialog("User already exists, logging in...");
+                                    loginExistingUser(username, password, email);
+                                } else {
+                                    hideProgressDialog();
+                                    String errorMessage = response.optString("error", "Failed to create user");
+                                    Toast.makeText(MainActivity.this, errorMessage, Toast.LENGTH_SHORT).show();
+                                }
+                            }
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                            hideProgressDialog();
+                        }
+                    }
+                },
+                new Response.ErrorListener() {
+                    @Override
+                    public void onErrorResponse(VolleyError error) {
+                        hideProgressDialog();
+                        Toast.makeText(MainActivity.this, "Error creating user: " + error.getMessage(), Toast.LENGTH_SHORT).show();
+                    }
+                }
+        ) {
             @Override
-            public void onSuccess(CreateUserResponse response) {
-                String userId = response.getUser().getUserId();
-                String createdUsername = response.getUser().getUsername();
+            public Map<String, String> getHeaders() {
+                Map<String, String> headers = new HashMap<>();
+                headers.put("X-Auth-Token", ADMIN_AUTH_TOKEN);
+                headers.put("X-User-Id", ADMIN_USER_ID);
+                headers.put("Content-Type", "application/json");
+                return headers;
+            }
+        };
 
-                // Step 2: Login with the new user to get their token
-                loginUser(createdUsername, password, userId, email);
+        // Add to your RequestQueue
+        RequestQueue requestQueue = Volley.newRequestQueue(this);
+        requestQueue.add(createUserRequest);
+    }
+
+    private void loginUserForRoomCreation(String username, String password, String userId, String email) {
+        updateProgressDialog("Logging in user...");
+
+        apiService.loginUser(username, password, new ApiCallback<JSONObject>() {
+            @Override
+            public void onSuccess(JSONObject response) {
+                try {
+                    if (response.getBoolean("success")) {
+                        // We got a fresh token but we don't store it
+                        // Just proceed to create room
+                        createRoomForGuest(username, userId, email);
+                    } else {
+                        hideProgressDialog();
+                        Toast.makeText(MainActivity.this, "Login failed for user", Toast.LENGTH_SHORT).show();
+                    }
+                } catch (Exception e) {
+                    hideProgressDialog();
+                    Toast.makeText(MainActivity.this, "Error parsing login response", Toast.LENGTH_SHORT).show();
+                }
             }
 
             @Override
             public void onError(String errorMessage) {
-                // Try to parse the error message as JSON to get error type
-                try {
-                    JSONObject errorJson = new JSONObject(errorMessage);
-                    String errorType = errorJson.optString("errorType", "");
-                    String error = errorJson.optString("error", "");
-
-                    if ("error-field-unavailable".equals(errorType) ||
-                            error.contains("already in use")) {
-                        // Username already exists - try to login instead
-                        updateProgressDialog("User already exists, logging in...");
-                        loginExistingUser(username, password, email);
-                    } else {
-                        hideProgressDialog();
-                        Toast.makeText(MainActivity.this, "Error creating user: " + error, Toast.LENGTH_SHORT).show();
-                    }
-                } catch (JSONException e) {
-                    // If error message is not JSON, check if it contains the error pattern
-                    if (errorMessage.contains("already in use") || errorMessage.contains("error-field-unavailable")) {
-                        updateProgressDialog("User already exists, logging in...");
-                        loginExistingUser(username, password, email);
-                    } else {
-                        hideProgressDialog();
-                        Toast.makeText(MainActivity.this, "Error creating user: " + errorMessage, Toast.LENGTH_SHORT).show();
-                    }
-                }
+                hideProgressDialog();
+                Toast.makeText(MainActivity.this, "Login error: " + errorMessage, Toast.LENGTH_SHORT).show();
             }
         });
     }
@@ -170,80 +254,48 @@ public class MainActivity extends AppCompatActivity {
             public void onSuccess(JSONObject response) {
                 try {
                     if (response.getBoolean("success")) {
-                        String userToken = response.getJSONObject("data").getString("authToken");
-                        String userId = response.getJSONObject("data").getString("userId");
-                        String usernameFromResponse = response.getJSONObject("data").getJSONObject("me").getString("username");
+                        JSONObject data = response.getJSONObject("data");
+                        String userId = data.getString("userId");
+                        String usernameFromResponse = data.getJSONObject("me").getString("username");
 
                         // Check if room already exists in database for this user
-                        checkAndCreateRoom(usernameFromResponse, userId, email, userToken);
+                        checkAndCreateRoom(usernameFromResponse, userId, email);
                     } else {
                         hideProgressDialog();
                         Toast.makeText(MainActivity.this, "Login failed for existing user", Toast.LENGTH_SHORT).show();
                     }
                 } catch (Exception e) {
                     hideProgressDialog();
-                    Toast.makeText(MainActivity.this, "Error parsing login response: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    Toast.makeText(MainActivity.this, "Error parsing login response", Toast.LENGTH_SHORT).show();
                 }
             }
 
             @Override
             public void onError(String errorMessage) {
                 hideProgressDialog();
-                Toast.makeText(MainActivity.this, "Login error: " + errorMessage, Toast.LENGTH_SHORT).show();
+                Toast.makeText(MainActivity.this, "Login error for existing user: " + errorMessage, Toast.LENGTH_SHORT).show();
             }
         });
     }
 
-    private void loginUser(String username, String password, String userId, String email) {
-        updateProgressDialog("Logging in user...");
-
-        apiService.loginUser(username, password, new ApiCallback<JSONObject>() {
-            @Override
-            public void onSuccess(JSONObject response) {
-                try {
-                    if (response.getBoolean("success")) {
-                        String userToken = response.getJSONObject("data").getString("authToken");
-                        String userUserId = response.getJSONObject("data").getString("userId");
-
-                        // Step 3: Create room for the user
-                        createRoomForGuest(username, userId, email, userToken);
-                    } else {
-                        hideProgressDialog();
-                        Toast.makeText(MainActivity.this, "Login failed for user", Toast.LENGTH_SHORT).show();
-                    }
-                } catch (Exception e) {
-                    hideProgressDialog();
-                    Toast.makeText(MainActivity.this, "Error parsing login response: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                }
-            }
-
-            @Override
-            public void onError(String errorMessage) {
-                hideProgressDialog();
-                Toast.makeText(MainActivity.this, "Login error: " + errorMessage, Toast.LENGTH_SHORT).show();
-            }
-        });
-    }
-
-    private void checkAndCreateRoom(String username, String userId, String email, String userToken) {
+    private void checkAndCreateRoom(String username, String userId, String email) {
         // Check if user already exists in database with roomId
         if (databaseHelper.userExists(username)) {
             User existingUser = getUserFromDatabase(username);
             if (existingUser != null && existingUser.getHostRoomId() != null && !existingUser.getHostRoomId().isEmpty()) {
-                // User already has a room - just update token if needed
-                updateProgressDialog("User already exists, updating...");
-                databaseHelper.updateUserToken(username, userToken);
+                // User already has a room - no token to update
+                updateProgressDialog("User already exists...");
                 guestCounter++;
                 loadGuestUsers();
                 hideProgressDialog();
-                Toast.makeText(MainActivity.this, "Guest user reconnected successfully", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Guest user reconnected successfully", Toast.LENGTH_SHORT).show();
             } else {
                 // User exists but no room - create room
-                createRoomForGuest(username, userId, email, userToken);
+                createRoomForGuest(username, userId, email);
             }
         } else {
             // User doesn't exist in database - create room
-            createRoomForGuest(username, userId, email, userToken);
+            createRoomForGuest(username, userId, email);
         }
     }
 
@@ -257,7 +309,7 @@ public class MainActivity extends AppCompatActivity {
         return null;
     }
 
-    private void createRoomForGuest(String username, String userId, String email, String userToken) {
+    private void createRoomForGuest(String username, String userId, String email) {
         updateProgressDialog("Creating chat room...");
 
         apiService.createRoom(username, new ApiCallback<CreateRoomResponse>() {
@@ -266,14 +318,14 @@ public class MainActivity extends AppCompatActivity {
                 hideProgressDialog();
                 String roomId = response.getRoom().getRoomId();
 
-                // Save or update user in database
+                // Save user to database WITHOUT token
+                User user = new User(username, "guest", userId, email, roomId);
+
                 if (databaseHelper.userExists(username)) {
-                    // Update existing user with new token and roomId
-                    databaseHelper.updateUserToken(username, userToken);
+                    // Update existing user with new roomId
                     databaseHelper.updateHostRoomId(username, roomId);
                 } else {
                     // Create new user record
-                    User user = new User(username, "guest", userId, email, userToken, roomId);
                     databaseHelper.addUser(user);
                 }
 
@@ -281,7 +333,7 @@ public class MainActivity extends AppCompatActivity {
                 guestCounter++;
                 loadGuestUsers();
 
-                Toast.makeText(MainActivity.this, "Guest created successfully with token", Toast.LENGTH_SHORT).show();
+                Toast.makeText(MainActivity.this, "Guest created successfully", Toast.LENGTH_SHORT).show();
             }
 
             @Override

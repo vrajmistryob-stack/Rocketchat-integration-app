@@ -13,18 +13,17 @@ import java.util.List;
 
 public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String DATABASE_NAME = "ChatDemo.db";
-    private static final int DATABASE_VERSION = 2; // Incremented version
+    private static final int DATABASE_VERSION = 3; // Incremented version to force database recreation
 
     // Table names and columns
     private static final String TABLE_USERS = "users";
     private static final String TABLE_GROUPS = "groups";
 
-    // User table columns
+    // User table columns (REMOVED token column)
     private static final String COLUMN_USERNAME = "username";
     private static final String COLUMN_ROLE = "role";
     private static final String COLUMN_USER_ID = "user_id";
     private static final String COLUMN_EMAIL = "email";
-    private static final String COLUMN_TOKEN = "token";
     private static final String COLUMN_HOST_ROOM_ID = "host_room_id";
 
     // Group table columns
@@ -39,13 +38,12 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     @Override
     public void onCreate(SQLiteDatabase db) {
-        // Create users table
+        // Create users table WITHOUT token column
         String CREATE_USERS_TABLE = "CREATE TABLE " + TABLE_USERS + "("
                 + COLUMN_USERNAME + " TEXT PRIMARY KEY,"
                 + COLUMN_ROLE + " TEXT,"
                 + COLUMN_USER_ID + " TEXT,"
                 + COLUMN_EMAIL + " TEXT,"
-                + COLUMN_TOKEN + " TEXT,"
                 + COLUMN_HOST_ROOM_ID + " TEXT" + ")";
         db.execSQL(CREATE_USERS_TABLE);
 
@@ -73,7 +71,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         onUpgrade(db, oldVersion, newVersion);
     }
 
-    // Existing user methods...
+    // User methods (without token)
     public void addUser(User user) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
@@ -81,7 +79,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         values.put(COLUMN_ROLE, user.getRole());
         values.put(COLUMN_USER_ID, user.getUserId());
         values.put(COLUMN_EMAIL, user.getEmail());
-        values.put(COLUMN_TOKEN, user.getToken());
         values.put(COLUMN_HOST_ROOM_ID, user.getHostRoomId());
 
         db.insert(TABLE_USERS, null, values);
@@ -103,7 +100,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 user.setRole(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_ROLE)));
                 user.setUserId(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_USER_ID)));
                 user.setEmail(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_EMAIL)));
-                user.setToken(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_TOKEN)));
                 user.setHostRoomId(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_HOST_ROOM_ID)));
                 userList.add(user);
             } while (cursor.moveToNext());
@@ -113,13 +109,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return userList;
     }
 
-    public void updateUserToken(String username, String token) {
-        SQLiteDatabase db = this.getWritableDatabase();
-        ContentValues values = new ContentValues();
-        values.put(COLUMN_TOKEN, token);
-        db.update(TABLE_USERS, values, COLUMN_USERNAME + " = ?", new String[]{username});
-        db.close();
-    }
+    // REMOVED: updateUserToken method
 
     public void updateHostRoomId(String username, String hostRoomId) {
         SQLiteDatabase db = this.getWritableDatabase();
@@ -140,7 +130,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return exists;
     }
 
-    // Group methods...
+    // Group methods (unchanged)
     public void addGroup(Group group) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();

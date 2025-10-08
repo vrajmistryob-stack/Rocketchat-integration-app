@@ -19,6 +19,7 @@ import com.example.chatdemo.model.User;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
+import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -35,9 +36,9 @@ public class HostActivity extends AppCompatActivity implements UserSelectionAdap
     private ProgressDialog progressDialog;
     private ApiService apiService;
 
-    // Host credentials
-    private static final String HOST_AUTH_TOKEN = "li_yzHW9k0cjA-fQnFClfRo00yCogbFpDMk4Es8Igfd";
-    private static final String HOST_USER_ID = "Wmi3KbN6Z896BLdz7";
+    // Host information
+    private static final String HOST_USERNAME = "host1";
+    private static final String HOST_PASSWORD = "Demo@123";
 
     private int groupCounter = 1;
 
@@ -109,6 +110,8 @@ public class HostActivity extends AppCompatActivity implements UserSelectionAdap
                 }
             }
             groupCounter = maxNumber + 1;
+        } else {
+            groupCounter = 1;
         }
     }
 
@@ -163,6 +166,42 @@ public class HostActivity extends AppCompatActivity implements UserSelectionAdap
         }
     }
 
+    private void launchSingleUserChat(User selectedUser) {
+        showProgressDialog("Logging in as host...");
+
+        apiService.loginUser(HOST_USERNAME, HOST_PASSWORD, new ApiCallback<JSONObject>() {
+            @Override
+            public void onSuccess(JSONObject response) {
+                hideProgressDialog();
+                try {
+                    if (response.getBoolean("success")) {
+                        // Get fresh host token from login response
+                        String hostToken = response.getJSONObject("data").getString("authToken");
+                        String roomId = selectedUser.getHostRoomId();
+
+                        if (roomId == null || roomId.isEmpty()) {
+                            Toast.makeText(HostActivity.this, "No chat room available for " + selectedUser.getUsername(), Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+
+                        // Launch direct chat with fresh host token
+                        ChatUtil.launchDirectChat(HostActivity.this, roomId, hostToken);
+                        Toast.makeText(HostActivity.this, "Opening chat with " + selectedUser.getUsername(), Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(HostActivity.this, "Host login failed", Toast.LENGTH_SHORT).show();
+                    }
+                } catch (Exception e) {
+                    Toast.makeText(HostActivity.this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onError(String errorMessage) {
+                hideProgressDialog();
+                Toast.makeText(HostActivity.this, "Host login error: " + errorMessage, Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
 
     private void createGroupWithSelectedUsers() {
         showProgressDialog("Creating group...");
@@ -211,27 +250,6 @@ public class HostActivity extends AppCompatActivity implements UserSelectionAdap
             }
         });
     }
-    private void launchSingleUserChat(User selectedUser) {
-        String roomId = selectedUser.getHostRoomId();
-        String token = HOST_AUTH_TOKEN;
-
-        if (roomId == null || roomId.isEmpty()) {
-            Toast.makeText(this, "No chat room available for " + selectedUser.getUsername(), Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        showProgressDialog("Opening chat with " + selectedUser.getUsername() + "...");
-
-        new android.os.Handler().postDelayed(
-                new Runnable() {
-                    public void run() {
-                        hideProgressDialog();
-                        // Use direct chat for single user
-                        ChatUtil.launchDirectChat(HostActivity.this, roomId, token);
-                    }
-                },
-                500);
-    }
 
     private void launchGroupChat(String groupName) {
         // Show option to open group chat
@@ -239,8 +257,30 @@ public class HostActivity extends AppCompatActivity implements UserSelectionAdap
                 .setTitle("Group Created")
                 .setMessage("Do you want to open the group chat?")
                 .setPositiveButton("Open Chat", (dialog, which) -> {
-                    // Use group name for group chat
-                    ChatUtil.launchGroupChat(HostActivity.this, groupName, HOST_AUTH_TOKEN);
+                    // Login as host before opening group chat
+                    showProgressDialog("Logging in as host...");
+                    apiService.loginUser(HOST_USERNAME, HOST_PASSWORD, new ApiCallback<JSONObject>() {
+                        @Override
+                        public void onSuccess(JSONObject response) {
+                            hideProgressDialog();
+                            try {
+                                if (response.getBoolean("success")) {
+                                    String hostToken = response.getJSONObject("data").getString("authToken");
+                                    ChatUtil.launchGroupChat(HostActivity.this, groupName, hostToken);
+                                } else {
+                                    Toast.makeText(HostActivity.this, "Host login failed", Toast.LENGTH_SHORT).show();
+                                }
+                            } catch (Exception e) {
+                                Toast.makeText(HostActivity.this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                            }
+                        }
+
+                        @Override
+                        public void onError(String errorMessage) {
+                            hideProgressDialog();
+                            Toast.makeText(HostActivity.this, "Host login error: " + errorMessage, Toast.LENGTH_SHORT).show();
+                        }
+                    });
                 })
                 .setNegativeButton("Later", null)
                 .show();

@@ -17,9 +17,7 @@ import com.google.gson.Gson;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,7 +41,7 @@ public class ApiService {
         return instance;
     }
 
-    // In ApiService class, update the createUser method error handling:
+    // Create User API - Uses ADMIN credentials
     public void createUser(String name, String email, String password, String username,
                            ApiCallback<CreateUserResponse> callback) {
         List<String> roles = new ArrayList<>();
@@ -51,11 +49,9 @@ public class ApiService {
         createUser(name, email, password, username, roles, callback);
     }
 
-    // And the main createUser method with roles:
     public void createUser(String name, String email, String password, String username,
                            List<String> roles, ApiCallback<CreateUserResponse> callback) {
 
-        // Create request body manually to handle JSON array properly
         JSONObject requestBody = new JSONObject();
         try {
             requestBody.put("name", name);
@@ -63,7 +59,6 @@ public class ApiService {
             requestBody.put("password", password);
             requestBody.put("username", username);
 
-            // Add roles as JSON array
             if (roles != null && !roles.isEmpty()) {
                 JSONArray rolesArray = new JSONArray();
                 for (String role : roles) {
@@ -91,7 +86,6 @@ public class ApiService {
                             if (createUserResponse.isSuccess()) {
                                 callback.onSuccess(createUserResponse);
                             } else {
-                                // Return the raw JSON error response so we can parse errorType
                                 callback.onError(response.toString());
                             }
                         } catch (Exception e) {
@@ -104,7 +98,6 @@ public class ApiService {
                     public void onErrorResponse(VolleyError error) {
                         String errorMessage = "Network error: " + error.getMessage();
                         if (error.networkResponse != null && error.networkResponse.data != null) {
-                            // Return the raw error response for proper parsing
                             errorMessage = new String(error.networkResponse.data);
                         }
                         callback.onError(errorMessage);
@@ -114,7 +107,8 @@ public class ApiService {
             @Override
             public Map<String, String> getHeaders() {
                 Map<String, String> headers = new HashMap<>();
-                headers.put("X-Auth-Token", ApiConfig.ADMIN_AUTH_TOKEN); // Use admin token for user creation
+                // ✅ Use ADMIN credentials for user creation only
+                headers.put("X-Auth-Token", ApiConfig.ADMIN_AUTH_TOKEN);
                 headers.put("X-User-Id", ApiConfig.ADMIN_USER_ID);
                 headers.put("Content-Type", "application/json");
                 return headers;
@@ -124,7 +118,7 @@ public class ApiService {
         requestQueue.add(jsonObjectRequest);
     }
 
-    // Create Room API
+    // Create Room API - Uses HOST credentials
     public void createRoom(String username, ApiCallback<CreateRoomResponse> callback) {
         CreateRoomRequest request = new CreateRoomRequest(username);
 
@@ -173,105 +167,19 @@ public class ApiService {
         ) {
             @Override
             public Map<String, String> getHeaders() {
-                return getDefaultHeaders();
+                Map<String, String> headers = new HashMap<>();
+                // ✅ Use HOST credentials for room creation
+                headers.put("X-Auth-Token", ApiConfig.HOST_AUTH_TOKEN);
+                headers.put("X-User-Id", ApiConfig.HOST_USER_ID);
+                headers.put("Content-Type", "application/json");
+                return headers;
             }
         };
 
         requestQueue.add(jsonObjectRequest);
     }
 
-    // Send message to multiple users API
-    public void sendMessageToUsers(List<String> usernames, String message,
-                                   ApiCallback<JSONObject> callback) {
-        JSONObject requestBody = new JSONObject();
-        try {
-            JSONArray usernamesArray = new JSONArray();
-            for (String username : usernames) {
-                usernamesArray.put(username);
-            }
-            requestBody.put("usernames", usernamesArray);
-            requestBody.put("message", message);
-
-        } catch (JSONException e) {
-            callback.onError("Error creating request: " + e.getMessage());
-            return;
-        }
-
-        JsonObjectRequest request = new JsonObjectRequest(
-                Request.Method.POST,
-                ApiConfig.getFullUrl("chat.sendMessage"), // Replace with your actual endpoint
-                requestBody,
-                new Response.Listener<JSONObject>() {
-                    @Override
-                    public void onResponse(JSONObject response) {
-                        callback.onSuccess(response);
-                    }
-                },
-                new Response.ErrorListener() {
-                    @Override
-                    public void onErrorResponse(VolleyError error) {
-                        String errorMessage = "Network error: " + error.getMessage();
-                        if (error.networkResponse != null && error.networkResponse.data != null) {
-                            errorMessage = new String(error.networkResponse.data);
-                        }
-                        callback.onError(errorMessage);
-                    }
-                }
-        ) {
-            @Override
-            public Map<String, String> getHeaders() {
-                return getDefaultHeaders();
-            }
-        };
-
-        requestQueue.add(request);
-    }
-
-    private Map<String, String> getDefaultHeaders() {
-        Map<String, String> headers = new HashMap<>();
-        headers.put("X-Auth-Token", ApiConfig.HOST_AUTH_TOKEN);
-        headers.put("X-User-Id", ApiConfig.HOST_USER_ID);
-        headers.put("Content-Type", "application/json");
-        return headers;
-    }
-
-    // Add this method to your ApiService class
-    // In ApiService class, fix the loginUser method:
-    public void loginUser(String username, String password, ApiCallback<JSONObject> callback) {
-        JSONObject requestBody = new JSONObject();
-        try {
-            requestBody.put("user", username);
-            requestBody.put("password", password);
-        } catch (JSONException e) {
-            callback.onError("Error creating login request: " + e.getMessage());
-            return;
-        }
-
-        JsonObjectRequest loginRequest = new JsonObjectRequest(
-                Request.Method.POST,
-                ApiConfig.BASE_URL + ApiConfig.LOGIN, // Fixed: include /api/v1/
-                requestBody,
-                new Response.Listener<JSONObject>() {
-                    @Override
-                    public void onResponse(JSONObject response) {
-                        callback.onSuccess(response);
-                    }
-                },
-                new Response.ErrorListener() {
-                    @Override
-                    public void onErrorResponse(VolleyError error) {
-                        String errorMessage = "Login error: " + error.getMessage();
-                        if (error.networkResponse != null && error.networkResponse.data != null) {
-                            errorMessage = new String(error.networkResponse.data);
-                        }
-                        callback.onError(errorMessage);
-                    }
-                }
-        );
-
-        requestQueue.add(loginRequest);
-    }
-
+    // Create Group API - Uses HOST credentials
     public void createGroup(String groupName, List<String> members, ApiCallback<CreateGroupResponse> callback) {
         CreateGroupRequest request = new CreateGroupRequest(groupName, members);
 
@@ -320,11 +228,104 @@ public class ApiService {
         ) {
             @Override
             public Map<String, String> getHeaders() {
-                return getDefaultHeaders();
+                Map<String, String> headers = new HashMap<>();
+                // ✅ Use HOST credentials for group creation
+                headers.put("X-Auth-Token", ApiConfig.HOST_AUTH_TOKEN);
+                headers.put("X-User-Id", ApiConfig.HOST_USER_ID);
+                headers.put("Content-Type", "application/json");
+                return headers;
             }
         };
 
         requestQueue.add(jsonObjectRequest);
+    }
+
+    // Login User API - No headers needed
+    public void loginUser(String username, String password, ApiCallback<JSONObject> callback) {
+        JSONObject requestBody = new JSONObject();
+        try {
+            requestBody.put("user", username);
+            requestBody.put("password", password);
+        } catch (JSONException e) {
+            callback.onError("Error creating login request: " + e.getMessage());
+            return;
+        }
+
+        JsonObjectRequest loginRequest = new JsonObjectRequest(
+                Request.Method.POST,
+                ApiConfig.getFullUrl(ApiConfig.LOGIN),
+                requestBody,
+                new Response.Listener<JSONObject>() {
+                    @Override
+                    public void onResponse(JSONObject response) {
+                        callback.onSuccess(response);
+                    }
+                },
+                new Response.ErrorListener() {
+                    @Override
+                    public void onErrorResponse(VolleyError error) {
+                        String errorMessage = "Login error: " + error.getMessage();
+                        if (error.networkResponse != null && error.networkResponse.data != null) {
+                            errorMessage = new String(error.networkResponse.data);
+                        }
+                        callback.onError(errorMessage);
+                    }
+                }
+        );
+
+        requestQueue.add(loginRequest);
+    }
+
+    // Send message to multiple users API - Uses HOST credentials
+    public void sendMessageToUsers(List<String> usernames, String message,
+                                   ApiCallback<JSONObject> callback) {
+        JSONObject requestBody = new JSONObject();
+        try {
+            JSONArray usernamesArray = new JSONArray();
+            for (String username : usernames) {
+                usernamesArray.put(username);
+            }
+            requestBody.put("usernames", usernamesArray);
+            requestBody.put("message", message);
+
+        } catch (JSONException e) {
+            callback.onError("Error creating request: " + e.getMessage());
+            return;
+        }
+
+        JsonObjectRequest request = new JsonObjectRequest(
+                Request.Method.POST,
+                ApiConfig.getFullUrl("chat.sendMessage"),
+                requestBody,
+                new Response.Listener<JSONObject>() {
+                    @Override
+                    public void onResponse(JSONObject response) {
+                        callback.onSuccess(response);
+                    }
+                },
+                new Response.ErrorListener() {
+                    @Override
+                    public void onErrorResponse(VolleyError error) {
+                        String errorMessage = "Network error: " + error.getMessage();
+                        if (error.networkResponse != null && error.networkResponse.data != null) {
+                            errorMessage = new String(error.networkResponse.data);
+                        }
+                        callback.onError(errorMessage);
+                    }
+                }
+        ) {
+            @Override
+            public Map<String, String> getHeaders() {
+                Map<String, String> headers = new HashMap<>();
+                // ✅ Use HOST credentials for sending messages
+                headers.put("X-Auth-Token", ApiConfig.HOST_AUTH_TOKEN);
+                headers.put("X-User-Id", ApiConfig.HOST_USER_ID);
+                headers.put("Content-Type", "application/json");
+                return headers;
+            }
+        };
+
+        requestQueue.add(request);
     }
 
     // Cancel all pending requests

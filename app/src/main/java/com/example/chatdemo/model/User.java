@@ -6,20 +6,23 @@ public class User {
     @SerializedName("_id")
     private String userId;
 
+    @SerializedName("username")
     private String username;
+
     private String role;
     private String email;
-    private String token;
     private String hostRoomId;
+
+    // REMOVED: token field
 
     public User() {}
 
-    public User(String username, String role, String userId, String email, String token, String hostRoomId) {
+    // REMOVED: token parameter from constructor
+    public User(String username, String role, String userId, String email, String hostRoomId) {
         this.username = username;
         this.role = role;
         this.userId = userId;
         this.email = email;
-        this.token = token;
         this.hostRoomId = hostRoomId;
     }
 
@@ -36,9 +39,8 @@ public class User {
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }
 
-    public String getToken() { return token; }
-    public void setToken(String token) { this.token = token; }
-
     public String getHostRoomId() { return hostRoomId; }
     public void setHostRoomId(String hostRoomId) { this.hostRoomId = hostRoomId; }
+
+    // REMOVED: getToken() and setToken() methods
 }
