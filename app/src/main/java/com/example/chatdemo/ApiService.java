@@ -327,6 +327,51 @@ public class ApiService {
 
         requestQueue.add(request);
     }
+    // Add this method to your ApiService class:
+    public void setActiveStatus(String userId, boolean activeStatus, ApiCallback<JSONObject> callback) {
+        JSONObject requestBody = new JSONObject();
+        try {
+            requestBody.put("activeStatus", activeStatus);
+            requestBody.put("userId", userId);
+        } catch (JSONException e) {
+            callback.onError("Error creating active status request: " + e.getMessage());
+            return;
+        }
+
+        JsonObjectRequest activeStatusRequest = new JsonObjectRequest(
+                Request.Method.POST,
+                ApiConfig.getFullUrl(ApiConfig.SET_ACTIVE_STATUS),
+                requestBody,
+                new Response.Listener<JSONObject>() {
+                    @Override
+                    public void onResponse(JSONObject response) {
+                        callback.onSuccess(response);
+                    }
+                },
+                new Response.ErrorListener() {
+                    @Override
+                    public void onErrorResponse(VolleyError error) {
+                        String errorMessage = "Network error: " + error.getMessage();
+                        if (error.networkResponse != null && error.networkResponse.data != null) {
+                            errorMessage = new String(error.networkResponse.data);
+                        }
+                        callback.onError(errorMessage);
+                    }
+                }
+        ) {
+            @Override
+            public Map<String, String> getHeaders() {
+                Map<String, String> headers = new HashMap<>();
+                // Use ADMIN credentials for setting active status
+                headers.put("X-Auth-Token", ApiConfig.ADMIN_AUTH_TOKEN);
+                headers.put("X-User-Id", ApiConfig.ADMIN_USER_ID);
+                headers.put("Content-Type", "application/json");
+                return headers;
+            }
+        };
+
+        requestQueue.add(activeStatusRequest);
+    }
 
     // Cancel all pending requests
     public void cancelAllRequests() {

@@ -5,9 +5,12 @@ public class ApiConfig {
 
     // API Endpoints
     public static final String CREATE_USER = "api/v1/users.create";
+    //public static final String CREATE_USER = "api/v1/users.register";
     public static final String CREATE_ROOM = "api/v1/dm.create";
     public static final String CREATE_GROUP = "api/v1/groups.create";
     public static final String LOGIN = "api/v1/login";
+    // In ApiConfig, add the new endpoint:
+    public static final String SET_ACTIVE_STATUS = "api/v1/users.setActiveStatus";
 
     // Admin credentials - ONLY for user creation
     public static final String ADMIN_AUTH_TOKEN = "SaXIXh2Jgxhwp0mIZk-J4FOUA13pGQFIe5uZ5jtNd7Z";

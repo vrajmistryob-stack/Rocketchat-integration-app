@@ -178,25 +178,20 @@ public class GroupsActivity extends AppCompatActivity implements GroupsAdapter.O
         apiService.loginUser(HOST_USERNAME, HOST_PASSWORD, new ApiCallback<JSONObject>() {
             @Override
             public void onSuccess(JSONObject response) {
-                hideProgressDialog();
                 try {
                     if (response.getBoolean("success")) {
-                        // Get fresh host token from login response
                         String hostToken = response.getJSONObject("data").getString("authToken");
+                        String userId = response.getJSONObject("data").getString("userId");
                         String groupName = group.getGroupName();
 
-                        if (groupName == null || groupName.isEmpty()) {
-                            Toast.makeText(GroupsActivity.this, "No group name available", Toast.LENGTH_SHORT).show();
-                            return;
-                        }
-
-                        // Launch group chat with fresh host token
-                        ChatUtil.launchGroupChat(GroupsActivity.this, groupName, hostToken);
-                        Toast.makeText(GroupsActivity.this, "Joining as Host", Toast.LENGTH_SHORT).show();
+                        // ✅ NEW: Set host as active before opening group chat
+                        setHostActiveStatus(userId, hostToken, groupName);
                     } else {
+                        hideProgressDialog();
                         Toast.makeText(GroupsActivity.this, "Host login failed", Toast.LENGTH_SHORT).show();
                     }
                 } catch (Exception e) {
+                    hideProgressDialog();
                     Toast.makeText(GroupsActivity.this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                 }
             }
@@ -212,30 +207,25 @@ public class GroupsActivity extends AppCompatActivity implements GroupsAdapter.O
     private void launchGroupChatAsUser(Group group, User user) {
         showProgressDialog("Logging in as " + user.getUsername() + "...");
 
-        String password = "Demo@123"; // Constant password for all guest users
+        String password = "Demo@123";
 
         apiService.loginUser(user.getUsername(), password, new ApiCallback<JSONObject>() {
             @Override
             public void onSuccess(JSONObject response) {
-                hideProgressDialog();
                 try {
                     if (response.getBoolean("success")) {
-                        // Get fresh user token from login response
                         String userToken = response.getJSONObject("data").getString("authToken");
+                        String userId = response.getJSONObject("data").getString("userId");
                         String groupName = group.getGroupName();
 
-                        if (groupName == null || groupName.isEmpty()) {
-                            Toast.makeText(GroupsActivity.this, "No group name available", Toast.LENGTH_SHORT).show();
-                            return;
-                        }
-
-                        // Launch group chat with fresh user token
-                        ChatUtil.launchGroupChat(GroupsActivity.this, groupName, userToken);
-                        Toast.makeText(GroupsActivity.this, "Joining as " + user.getUsername(), Toast.LENGTH_SHORT).show();
+                        // ✅ NEW: Set user as active before opening group chat
+                        setUserActiveStatusForGroup(userId, userToken, groupName, user.getUsername());
                     } else {
+                        hideProgressDialog();
                         Toast.makeText(GroupsActivity.this, "Login failed for " + user.getUsername(), Toast.LENGTH_SHORT).show();
                     }
                 } catch (Exception e) {
+                    hideProgressDialog();
                     Toast.makeText(GroupsActivity.this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                 }
             }
@@ -244,6 +234,63 @@ public class GroupsActivity extends AppCompatActivity implements GroupsAdapter.O
             public void onError(String errorMessage) {
                 hideProgressDialog();
                 Toast.makeText(GroupsActivity.this, "Login error: " + errorMessage, Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    // ✅ NEW: Helper methods for setting active status in GroupsActivity
+    private void setHostActiveStatus(String userId, String hostToken, String groupName) {
+        apiService.setActiveStatus(userId, true, new ApiCallback<JSONObject>() {
+            @Override
+            public void onSuccess(JSONObject response) {
+                hideProgressDialog();
+                try {
+                    if (response.getBoolean("success")) {
+                        // Host is now active, launch group chat
+                        ChatUtil.launchGroupChat(GroupsActivity.this, groupName, hostToken);
+                        Toast.makeText(GroupsActivity.this, "Joining as Host", Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(GroupsActivity.this, "Failed to set host active status", Toast.LENGTH_SHORT).show();
+                    }
+                } catch (Exception e) {
+                    Toast.makeText(GroupsActivity.this, "Error setting host active status: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onError(String errorMessage) {
+                hideProgressDialog();
+                // Even if active status fails, still try to open group chat
+                ChatUtil.launchGroupChat(GroupsActivity.this, groupName, hostToken);
+                Toast.makeText(GroupsActivity.this, "Joining as Host (active status failed)", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void setUserActiveStatusForGroup(String userId, String userToken, String groupName, String username) {
+        apiService.setActiveStatus(userId, true, new ApiCallback<JSONObject>() {
+            @Override
+            public void onSuccess(JSONObject response) {
+                hideProgressDialog();
+                try {
+                    if (response.getBoolean("success")) {
+                        // User is now active, launch group chat
+                        ChatUtil.launchGroupChat(GroupsActivity.this, groupName, userToken);
+                        Toast.makeText(GroupsActivity.this, "Joining as " + username, Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(GroupsActivity.this, "Failed to set active status for " + username, Toast.LENGTH_SHORT).show();
+                    }
+                } catch (Exception e) {
+                    Toast.makeText(GroupsActivity.this, "Error setting active status: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onError(String errorMessage) {
+                hideProgressDialog();
+                // Even if active status fails, still try to open group chat
+                ChatUtil.launchGroupChat(GroupsActivity.this, groupName, userToken);
+                Toast.makeText(GroupsActivity.this, "Joining as " + username + " (active status failed)", Toast.LENGTH_SHORT).show();
             }
         });
     }

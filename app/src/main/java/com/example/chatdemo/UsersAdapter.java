@@ -61,31 +61,25 @@ public class UsersAdapter extends RecyclerView.Adapter<UsersAdapter.UserViewHold
     private void launchChatWithFreshToken(User user) {
         showProgressDialog("Logging in as " + user.getUsername() + "...");
 
-        String password = "Demo@123"; // Constant password for all guest users
+        String password = "Demo@123";
 
         apiService.loginUser(user.getUsername(), password, new ApiCallback<JSONObject>() {
             @Override
             public void onSuccess(JSONObject response) {
-                hideProgressDialog();
                 try {
                     if (response.getBoolean("success")) {
-                        // Get fresh token from login response
                         String userToken = response.getJSONObject("data").getString("authToken");
+                        String userId = response.getJSONObject("data").getString("userId");
                         String roomId = user.getHostRoomId();
 
-                        // Validate roomId
-                        if (roomId == null || roomId.isEmpty()) {
-                            Toast.makeText(context, "No chat room available for " + user.getUsername(), Toast.LENGTH_SHORT).show();
-                            return;
-                        }
-
-                        // Launch direct chat with fresh token
-                        ChatUtil.launchDirectChat(context, roomId, userToken);
-                        Toast.makeText(context, "Opening chat as " + user.getUsername(), Toast.LENGTH_SHORT).show();
+                        // ✅ NEW: Set user as active after successful login
+                        setUserActiveStatus(userId, userToken, roomId);
                     } else {
+                        hideProgressDialog();
                         Toast.makeText(context, "Login failed for " + user.getUsername(), Toast.LENGTH_SHORT).show();
                     }
                 } catch (Exception e) {
+                    hideProgressDialog();
                     Toast.makeText(context, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                 }
             }
@@ -94,6 +88,44 @@ public class UsersAdapter extends RecyclerView.Adapter<UsersAdapter.UserViewHold
             public void onError(String errorMessage) {
                 hideProgressDialog();
                 Toast.makeText(context, "Login error: " + errorMessage, Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    // ✅ NEW: Method to set user active status and then launch chat
+    private void setUserActiveStatus(String userId, String userToken, String roomId) {
+        apiService.setActiveStatus(userId, true, new ApiCallback<JSONObject>() {
+            @Override
+            public void onSuccess(JSONObject response) {
+                hideProgressDialog();
+                try {
+                    if (response.getBoolean("success")) {
+                        // User is now active, launch chat
+                        if (roomId == null || roomId.isEmpty()) {
+                            Toast.makeText(context, "No chat room available", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+
+                        ChatUtil.launchDirectChat(context, roomId, userToken);
+                        Toast.makeText(context, "Opening chat", Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(context, "Failed to set active status", Toast.LENGTH_SHORT).show();
+                    }
+                } catch (Exception e) {
+                    Toast.makeText(context, "Error setting active status: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onError(String errorMessage) {
+                hideProgressDialog();
+                // Even if active status fails, still try to open chat
+                if (roomId != null && !roomId.isEmpty()) {
+                    ChatUtil.launchDirectChat(context, roomId, userToken);
+                    Toast.makeText(context, "Opening chat (active status failed)", Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(context, "Active status error: " + errorMessage, Toast.LENGTH_SHORT).show();
+                }
             }
         });
     }

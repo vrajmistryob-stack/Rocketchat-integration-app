@@ -28,6 +28,9 @@ public class ChatActivity extends AppCompatActivity {
         webView = findViewById(R.id.webView);
         btnBack = findViewById(R.id.btnBack);
 
+        // Clear HTML5 Web Storage (Removes the Meteor.loginToken from the previous user)
+        WebStorage.getInstance().deleteAllData();
+
         // Get URL from intent
         String chatUrl = getIntent().getStringExtra("CHAT_URL");
 
