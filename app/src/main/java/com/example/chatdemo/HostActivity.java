@@ -169,28 +169,77 @@ public class HostActivity extends AppCompatActivity implements UserSelectionAdap
     private void launchSingleUserChat(User selectedUser) {
         showProgressDialog("Logging in as host...");
 
-        apiService.loginUser(HOST_USERNAME, HOST_PASSWORD, new ApiCallback<JSONObject>() {
+        // First logout previous user
+        logoutPreviousUser(new ApiCallback<JSONObject>() {
             @Override
             public void onSuccess(JSONObject response) {
-                hideProgressDialog();
+                // Now login as host
+                loginAsHostForDirectChat(selectedUser);
+            }
+
+            @Override
+            public void onError(String errorMessage) {
+                // Even if logout fails, continue with host login
+                loginAsHostForDirectChat(selectedUser);
+            }
+        });
+    }
+
+    // ✅ NEW: Helper method to logout previous user
+    private void logoutPreviousUser(ApiCallback<JSONObject> callback) {
+        UserSessionManager sessionManager = UserSessionManager.getInstance();
+
+        if (sessionManager.hasActiveSession()) {
+            String previousToken = sessionManager.getCurrentAuthToken();
+            String previousUserId = sessionManager.getCurrentUserId();
+
+            apiService.logoutUser(previousToken, previousUserId, new ApiCallback<JSONObject>() {
+                @Override
+                public void onSuccess(JSONObject response) {
+                    sessionManager.clearCurrentUser();
+                    callback.onSuccess(response);
+                }
+
+                @Override
+                public void onError(String errorMessage) {
+                    sessionManager.clearCurrentUser();
+                    callback.onError(errorMessage);
+                }
+            });
+        } else {
+            callback.onSuccess(new JSONObject());
+        }
+    }
+
+    // ✅ NEW: Login method that sets session
+    // In HostActivity.java
+
+    private void loginAsHostForDirectChat(User selectedUser) {
+        apiService.loginUser(ApiConfig.HOST_USERNAME, ApiConfig.HOST_PASSWORD, new ApiCallback<JSONObject>() {
+            @Override
+            public void onSuccess(JSONObject response) {
                 try {
                     if (response.getBoolean("success")) {
-                        // Get fresh host token from login response
                         String hostToken = response.getJSONObject("data").getString("authToken");
+                        String userId = response.getJSONObject("data").getString("userId");
                         String roomId = selectedUser.getHostRoomId();
 
-                        if (roomId == null || roomId.isEmpty()) {
-                            Toast.makeText(HostActivity.this, "No chat room available for " + selectedUser.getUsername(), Toast.LENGTH_SHORT).show();
-                            return;
-                        }
+                        // 1. Set the new host session
+                        UserSessionManager.getInstance().setCurrentUser(hostToken, userId, ApiConfig.HOST_USERNAME);
 
-                        // Launch direct chat with fresh host token
+                        // 2. Launch Direct Chat (This was missing)
                         ChatUtil.launchDirectChat(HostActivity.this, roomId, hostToken);
-                        Toast.makeText(HostActivity.this, "Opening chat with " + selectedUser.getUsername(), Toast.LENGTH_SHORT).show();
+
+                        // 3. Dismiss the dialog (This was missing)
+                        hideProgressDialog();
+
                     } else {
+                        hideProgressDialog();
                         Toast.makeText(HostActivity.this, "Host login failed", Toast.LENGTH_SHORT).show();
                     }
                 } catch (Exception e) {
+                    // Ensure dialog is dismissed even on JSON parsing error
+                    hideProgressDialog();
                     Toast.makeText(HostActivity.this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                 }
             }

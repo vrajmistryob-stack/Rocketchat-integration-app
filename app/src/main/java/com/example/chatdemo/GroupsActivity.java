@@ -175,7 +175,72 @@ public class GroupsActivity extends AppCompatActivity implements GroupsAdapter.O
     private void launchGroupChatAsHost(Group group) {
         showProgressDialog("Logging in as host...");
 
-        apiService.loginUser(HOST_USERNAME, HOST_PASSWORD, new ApiCallback<JSONObject>() {
+        // First logout previous user
+        logoutPreviousUser(new ApiCallback<JSONObject>() {
+            @Override
+            public void onSuccess(JSONObject response) {
+                // Now login as host
+                loginAsHostForGroup(group);
+            }
+
+            @Override
+            public void onError(String errorMessage) {
+                // Even if logout fails, continue with host login
+                loginAsHostForGroup(group);
+            }
+        });
+    }
+
+    private void launchGroupChatAsUser(Group group, User user) {
+        showProgressDialog("Logging in as " + user.getUsername() + "...");
+
+        String password = "Demo@123";
+
+        // First logout previous user
+        logoutPreviousUser(new ApiCallback<JSONObject>() {
+            @Override
+            public void onSuccess(JSONObject response) {
+                // Now login as user
+                loginAsUserForGroup(group, user, password);
+            }
+
+            @Override
+            public void onError(String errorMessage) {
+                // Even if logout fails, continue with user login
+                loginAsUserForGroup(group, user, password);
+            }
+        });
+    }
+
+    // ✅ NEW: Helper method to logout previous user
+    private void logoutPreviousUser(ApiCallback<JSONObject> callback) {
+        UserSessionManager sessionManager = UserSessionManager.getInstance();
+
+        if (sessionManager.hasActiveSession()) {
+            String previousToken = sessionManager.getCurrentAuthToken();
+            String previousUserId = sessionManager.getCurrentUserId();
+
+            apiService.logoutUser(previousToken, previousUserId, new ApiCallback<JSONObject>() {
+                @Override
+                public void onSuccess(JSONObject response) {
+                    sessionManager.clearCurrentUser();
+                    callback.onSuccess(response);
+                }
+
+                @Override
+                public void onError(String errorMessage) {
+                    sessionManager.clearCurrentUser();
+                    callback.onError(errorMessage);
+                }
+            });
+        } else {
+            callback.onSuccess(new JSONObject());
+        }
+    }
+
+    // ✅ NEW: Login methods that set session
+    private void loginAsHostForGroup(Group group) {
+        apiService.loginUser(ApiConfig.HOST_USERNAME, ApiConfig.HOST_PASSWORD, new ApiCallback<JSONObject>() {
             @Override
             public void onSuccess(JSONObject response) {
                 try {
@@ -184,7 +249,9 @@ public class GroupsActivity extends AppCompatActivity implements GroupsAdapter.O
                         String userId = response.getJSONObject("data").getString("userId");
                         String groupName = group.getGroupName();
 
-                        // ✅ NEW: Set host as active before opening group chat
+                        // ✅ Set the new host session
+                        UserSessionManager.getInstance().setCurrentUser(hostToken, userId, ApiConfig.HOST_USERNAME);
+
                         setHostActiveStatus(userId, hostToken, groupName);
                     } else {
                         hideProgressDialog();
@@ -204,11 +271,7 @@ public class GroupsActivity extends AppCompatActivity implements GroupsAdapter.O
         });
     }
 
-    private void launchGroupChatAsUser(Group group, User user) {
-        showProgressDialog("Logging in as " + user.getUsername() + "...");
-
-        String password = "Demo@123";
-
+    private void loginAsUserForGroup(Group group, User user, String password) {
         apiService.loginUser(user.getUsername(), password, new ApiCallback<JSONObject>() {
             @Override
             public void onSuccess(JSONObject response) {
@@ -218,7 +281,9 @@ public class GroupsActivity extends AppCompatActivity implements GroupsAdapter.O
                         String userId = response.getJSONObject("data").getString("userId");
                         String groupName = group.getGroupName();
 
-                        // ✅ NEW: Set user as active before opening group chat
+                        // ✅ Set the new user session
+                        UserSessionManager.getInstance().setCurrentUser(userToken, userId, user.getUsername());
+
                         setUserActiveStatusForGroup(userId, userToken, groupName, user.getUsername());
                     } else {
                         hideProgressDialog();

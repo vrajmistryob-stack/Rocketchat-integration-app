@@ -23,6 +23,8 @@ import com.example.chatdemo.model.CreateRoomResponse;
 import com.example.chatdemo.model.CreateUserResponse;
 import com.example.chatdemo.model.User;
 import com.google.android.material.button.MaterialButton;
+
+import org.json.JSONException;
 import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -39,7 +41,10 @@ public class MainActivity extends AppCompatActivity {
     private ProgressDialog progressDialog;
 
     // API Configuration
-    private static final String BASE_URL = "http://192.168.0.112:3000/";
+//    private static final String BASE_URL = "http://192.168.0.112:3000/";
+
+    // ngrok https secure base URL
+    public static final String BASE_URL = "https://tena-rheumatoid-spongingly.ngrok-free.dev/";
     private static final String CREATE_USER_URL = BASE_URL + "api/v1/users.create";
     private static final String CREATE_ROOM_URL = BASE_URL + "api/v1/dm.create";
     private static final String LOGIN_URL = BASE_URL + "api/v1/login";
@@ -47,7 +52,7 @@ public class MainActivity extends AppCompatActivity {
     // Host credentials
     private static final String HOST_AUTH_TOKEN = "7LGO3EMJtAdVSbujIh15XVBWEyagG4eWlm0DaQyNRoY";
     private static final String HOST_USER_ID = "BqF9ZQW49PwY4dpZL";
-    private static final String ADMIN_AUTH_TOKEN = "SaXIXh2Jgxhwp0mIZk-J4FOUA13pGQFIe5uZ5jtNd7Z";
+    private static final String ADMIN_AUTH_TOKEN = "I5omUkou0pHrP0s_SOEUTmOhQD5Jt05LJiOJoGo6vLo";
     private static final String ADMIN_USER_ID = "MJncAdb5FYSoM4fjs";
 
     private int guestCounter = 1;
@@ -153,6 +158,12 @@ public class MainActivity extends AppCompatActivity {
             requestBody.put("email", email);
             requestBody.put("password", password);
             requestBody.put("username", username);
+            requestBody.put("verified", false);
+//            requestBody.put("emails", new JSONObject[]{
+//                    new JSONObject()
+//                            .put("address", email)
+//                            .put("verified", true)
+//            });
         } catch (Exception e) {
             e.printStackTrace();
             hideProgressDialog();
@@ -175,24 +186,13 @@ public class MainActivity extends AppCompatActivity {
                                 // Step 2: Login with the new user to create room
                                 loginUserForRoomCreation(createdUsername, password, userId, email);
                             } else {
-                                // User creation failed - check if it's because username already exists
-                                String errorType = response.optString("errorType", "");
-                                String error = response.optString("error", "");
-
-                                if (errorType.equals("error-field-unavailable") ||
-                                        error.contains("already in use")) {
-                                    // Username already exists - try to login instead
-                                    updateProgressDialog("User already exists, logging in...");
-                                    loginExistingUser(username, password, email);
-                                } else {
-                                    hideProgressDialog();
-                                    String errorMessage = response.optString("error", "Failed to create user");
-                                    Toast.makeText(MainActivity.this, errorMessage, Toast.LENGTH_SHORT).show();
-                                }
+                                // Enhanced error handling for user creation failure
+                                handleUserCreationError(response, username, password, email);
                             }
                         } catch (Exception e) {
                             e.printStackTrace();
                             hideProgressDialog();
+                            Toast.makeText(MainActivity.this, "Error parsing user creation response", Toast.LENGTH_SHORT).show();
                         }
                     }
                 },
@@ -200,7 +200,23 @@ public class MainActivity extends AppCompatActivity {
                     @Override
                     public void onErrorResponse(VolleyError error) {
                         hideProgressDialog();
-                        Toast.makeText(MainActivity.this, "Error creating user: " + error.getMessage(), Toast.LENGTH_SHORT).show();
+                        // Check if it's a username conflict error from network response
+                        String errorMessage = "Error creating user: " + error.getMessage();
+                        if (error.networkResponse != null && error.networkResponse.data != null) {
+                            String responseBody = new String(error.networkResponse.data);
+                            try {
+                                JSONObject errorResponse = new JSONObject(responseBody);
+                                if (isUsernameUnavailableError(errorResponse)) {
+                                    // Username exists, try to login
+                                    updateProgressDialog("User already exists, logging in...");
+                                    loginExistingUser(username, password, email);
+                                    return;
+                                }
+                            } catch (JSONException e) {
+                                // Not a JSON error response, continue with normal error
+                            }
+                        }
+                        Toast.makeText(MainActivity.this, errorMessage, Toast.LENGTH_SHORT).show();
                     }
                 }
         ) {
@@ -214,9 +230,33 @@ public class MainActivity extends AppCompatActivity {
             }
         };
 
-        // Add to your RequestQueue
         RequestQueue requestQueue = Volley.newRequestQueue(this);
         requestQueue.add(createUserRequest);
+    }
+
+    private void handleUserCreationError(JSONObject response, String username, String password, String email) {
+        String errorType = response.optString("errorType", "");
+        String error = response.optString("error", "");
+
+        if (isUsernameUnavailableError(response)) {
+            // Username already exists - try to login instead
+            updateProgressDialog("User already exists, logging in...");
+            loginExistingUser(username, password, email);
+        } else {
+            hideProgressDialog();
+            String errorMessage = response.optString("error", "Failed to create user");
+            Toast.makeText(MainActivity.this, errorMessage, Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private boolean isUsernameUnavailableError(JSONObject response) {
+        String errorType = response.optString("errorType", "");
+        String error = response.optString("error", "");
+
+        return errorType.equals("error-field-unavailable") ||
+                error.contains("already in use") ||
+                error.contains("username is already in use") ||
+                error.contains("guest") && error.contains("already in use");
     }
 
     private void loginUserForRoomCreation(String username, String password, String userId, String email) {
@@ -249,6 +289,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void loginExistingUser(String username, String password, String email) {
+        updateProgressDialog("Logging in existing user...");
+
         apiService.loginUser(username, password, new ApiCallback<JSONObject>() {
             @Override
             public void onSuccess(JSONObject response) {
@@ -258,7 +300,7 @@ public class MainActivity extends AppCompatActivity {
                         String userId = data.getString("userId");
                         String usernameFromResponse = data.getJSONObject("me").getString("username");
 
-                        // Check if room already exists in database for this user
+                        updateProgressDialog("Setting up user session...");
                         checkAndCreateRoom(usernameFromResponse, userId, email);
                     } else {
                         hideProgressDialog();
@@ -273,18 +315,24 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onError(String errorMessage) {
                 hideProgressDialog();
-                Toast.makeText(MainActivity.this, "Login error for existing user: " + errorMessage, Toast.LENGTH_SHORT).show();
+                Toast.makeText(MainActivity.this, "Login error: " + errorMessage, Toast.LENGTH_SHORT).show();
             }
         });
     }
 
     private void checkAndCreateRoom(String username, String userId, String email) {
         // Check if user already exists in database with roomId
-        if (databaseHelper.userExists(username)) {
-            User existingUser = getUserFromDatabase(username);
-            if (existingUser != null && existingUser.getHostRoomId() != null && !existingUser.getHostRoomId().isEmpty()) {
-                // User already has a room - no token to update
+        User existingUser = databaseHelper.getUserByUsername(username);
+        if (existingUser != null) {
+            if (existingUser.getHostRoomId() != null && !existingUser.getHostRoomId().isEmpty()) {
+                // User already has a room - update user info if needed
                 updateProgressDialog("User already exists...");
+
+                // Update user record with latest userId if different
+                if (!existingUser.getUserId().equals(userId)) {
+                    databaseHelper.updateUserId(username, userId);
+                }
+
                 guestCounter++;
                 loadGuestUsers();
                 hideProgressDialog();
@@ -294,20 +342,11 @@ public class MainActivity extends AppCompatActivity {
                 createRoomForGuest(username, userId, email);
             }
         } else {
-            // User doesn't exist in database - create room
+            // User doesn't exist in database - create room and save user
             createRoomForGuest(username, userId, email);
         }
     }
 
-    private User getUserFromDatabase(String username) {
-        List<User> allUsers = databaseHelper.getAllGuests();
-        for (User user : allUsers) {
-            if (user.getUsername().equals(username)) {
-                return user;
-            }
-        }
-        return null;
-    }
 
     private void createRoomForGuest(String username, String userId, String email) {
         updateProgressDialog("Creating chat room...");

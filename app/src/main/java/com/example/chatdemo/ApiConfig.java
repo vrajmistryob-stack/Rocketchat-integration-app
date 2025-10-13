@@ -2,6 +2,8 @@ package com.example.chatdemo;
 
 public class ApiConfig {
     public static final String BASE_URL = "http://192.168.0.112:3000/";
+    // ngrok https secure base URL
+//    public static final String BASE_URL = "https://tena-rheumatoid-spongingly.ngrok-free.dev/";
 
     // API Endpoints
     public static final String CREATE_USER = "api/v1/users.create";
@@ -9,6 +11,8 @@ public class ApiConfig {
     public static final String CREATE_ROOM = "api/v1/dm.create";
     public static final String CREATE_GROUP = "api/v1/groups.create";
     public static final String LOGIN = "api/v1/login";
+    // In ApiConfig, add the new endpoint:
+    public static final String LOGOUT = "api/v1/logout";
     // In ApiConfig, add the new endpoint:
     public static final String SET_ACTIVE_STATUS = "api/v1/users.setActiveStatus";
 

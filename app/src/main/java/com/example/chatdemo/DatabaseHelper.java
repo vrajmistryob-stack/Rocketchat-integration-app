@@ -13,7 +13,7 @@ import java.util.List;
 
 public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String DATABASE_NAME = "ChatDemo.db";
-    private static final int DATABASE_VERSION = 3; // Incremented version to force database recreation
+    private static final int DATABASE_VERSION = 3;
 
     // Table names and columns
     private static final String TABLE_USERS = "users";
@@ -109,7 +109,40 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return userList;
     }
 
-    // REMOVED: updateUserToken method
+    // Get user by username
+    public User getUserByUsername(String username) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        User user = null;
+
+        Cursor cursor = db.query(TABLE_USERS, null,
+                COLUMN_USERNAME + " = ?", new String[]{username},
+                null, null, null);
+
+        if (cursor.moveToFirst()) {
+            user = new User();
+            user.setUsername(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_USERNAME)));
+            user.setRole(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_ROLE)));
+            user.setUserId(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_USER_ID)));
+            user.setEmail(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_EMAIL)));
+            user.setHostRoomId(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_HOST_ROOM_ID)));
+        }
+        cursor.close();
+        db.close();
+        return user;
+    }
+
+    // Update user ID
+    public boolean updateUserId(String username, String newUserId) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put(COLUMN_USER_ID, newUserId);
+
+        int rowsAffected = db.update(TABLE_USERS, values,
+                COLUMN_USERNAME + " = ?", new String[]{username});
+        db.close();
+
+        return rowsAffected > 0;
+    }
 
     public void updateHostRoomId(String username, String hostRoomId) {
         SQLiteDatabase db = this.getWritableDatabase();
@@ -130,7 +163,38 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return exists;
     }
 
-    // Group methods (unchanged)
+    // Delete user by username
+    public boolean deleteUser(String username) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        int rowsAffected = db.delete(TABLE_USERS, COLUMN_USERNAME + " = ?", new String[]{username});
+        db.close();
+        return rowsAffected > 0;
+    }
+
+    // Get all users (not just guests)
+    public List<User> getAllUsers() {
+        List<User> userList = new ArrayList<>();
+        SQLiteDatabase db = this.getReadableDatabase();
+
+        Cursor cursor = db.query(TABLE_USERS, null, null, null, null, null, null);
+
+        if (cursor.moveToFirst()) {
+            do {
+                User user = new User();
+                user.setUsername(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_USERNAME)));
+                user.setRole(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_ROLE)));
+                user.setUserId(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_USER_ID)));
+                user.setEmail(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_EMAIL)));
+                user.setHostRoomId(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_HOST_ROOM_ID)));
+                userList.add(user);
+            } while (cursor.moveToNext());
+        }
+        cursor.close();
+        db.close();
+        return userList;
+    }
+
+    // Group methods
     public void addGroup(Group group) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
@@ -183,5 +247,39 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         cursor.close();
         db.close();
         return exists;
+    }
+
+    // Delete group by group ID
+    public boolean deleteGroup(String groupId) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        int rowsAffected = db.delete(TABLE_GROUPS, COLUMN_GROUP_ID + " = ?", new String[]{groupId});
+        db.close();
+        return rowsAffected > 0;
+    }
+
+    // Get group by group ID
+    public Group getGroupById(String groupId) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        Group group = null;
+
+        Cursor cursor = db.query(TABLE_GROUPS, null,
+                COLUMN_GROUP_ID + " = ?", new String[]{groupId},
+                null, null, null);
+
+        if (cursor.moveToFirst()) {
+            group = new Group();
+            group.setGroupId(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_GROUP_ID)));
+            group.setRoomId(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_ROOM_ID)));
+            group.setGroupName(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_GROUP_NAME)));
+
+            // Convert JSON string back to list
+            String usernamesJson = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_USERNAMES));
+            Gson gson = new Gson();
+            List<String> usernames = gson.fromJson(usernamesJson, List.class);
+            group.setUsernames(usernames);
+        }
+        cursor.close();
+        db.close();
+        return group;
     }
 }

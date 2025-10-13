@@ -63,6 +63,54 @@ public class UsersAdapter extends RecyclerView.Adapter<UsersAdapter.UserViewHold
 
         String password = "Demo@123";
 
+        // First, logout previous user if any
+        logoutPreviousUser(new ApiCallback<JSONObject>() {
+            @Override
+            public void onSuccess(JSONObject response) {
+                // Previous user logged out, now login new user
+                loginNewUser(user, password);
+            }
+
+            @Override
+            public void onError(String errorMessage) {
+                // Even if logout fails, continue with login
+                loginNewUser(user, password);
+            }
+        });
+    }
+
+    // ✅ NEW: Method to logout previous user
+    private void logoutPreviousUser(ApiCallback<JSONObject> callback) {
+        UserSessionManager sessionManager = UserSessionManager.getInstance();
+
+        if (sessionManager.hasActiveSession()) {
+            String previousToken = sessionManager.getCurrentAuthToken();
+            String previousUserId = sessionManager.getCurrentUserId();
+            String previousUsername = sessionManager.getCurrentUsername();
+
+            apiService.logoutUser(previousToken, previousUserId, new ApiCallback<JSONObject>() {
+                @Override
+                public void onSuccess(JSONObject response) {
+                    // Clear the session after successful logout
+                    sessionManager.clearCurrentUser();
+                    callback.onSuccess(response);
+                }
+
+                @Override
+                public void onError(String errorMessage) {
+                    // Still clear session even if logout API fails
+                    sessionManager.clearCurrentUser();
+                    callback.onError(errorMessage);
+                }
+            });
+        } else {
+            // No previous user to logout
+            callback.onSuccess(new JSONObject());
+        }
+    }
+
+    // ✅ NEW: Method to login new user and set session
+    private void loginNewUser(User user, String password) {
         apiService.loginUser(user.getUsername(), password, new ApiCallback<JSONObject>() {
             @Override
             public void onSuccess(JSONObject response) {
@@ -72,7 +120,10 @@ public class UsersAdapter extends RecyclerView.Adapter<UsersAdapter.UserViewHold
                         String userId = response.getJSONObject("data").getString("userId");
                         String roomId = user.getHostRoomId();
 
-                        // ✅ NEW: Set user as active after successful login
+                        // ✅ Set the new user session
+                        UserSessionManager.getInstance().setCurrentUser(userToken, userId, user.getUsername());
+
+                        // Set user as active after successful login
                         setUserActiveStatus(userId, userToken, roomId);
                     } else {
                         hideProgressDialog();
@@ -91,7 +142,6 @@ public class UsersAdapter extends RecyclerView.Adapter<UsersAdapter.UserViewHold
             }
         });
     }
-
     // ✅ NEW: Method to set user active status and then launch chat
     private void setUserActiveStatus(String userId, String userToken, String roomId) {
         apiService.setActiveStatus(userId, true, new ApiCallback<JSONObject>() {

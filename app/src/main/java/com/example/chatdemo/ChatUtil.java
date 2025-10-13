@@ -7,7 +7,10 @@ import com.example.chatdemo.model.Group;
 
 public class ChatUtil {
 
-    private static final String DEFAULT_BASE_URL = "http://192.168.0.112:3000";
+//    private static final String DEFAULT_BASE_URL = "http://192.168.0.112:3000";
+    // ngrok https secure base URL
+    public static final String DEFAULT_BASE_URL = " https://tena-rheumatoid-spongingly.ngrok-free.dev";
+
 
     /**
      * Builds direct message URL with roomId and token parameters

@@ -372,6 +372,42 @@ public class ApiService {
 
         requestQueue.add(activeStatusRequest);
     }
+    // Add this method to your ApiService class:
+    public void logoutUser(String authToken, String userId, ApiCallback<JSONObject> callback) {
+        JsonObjectRequest logoutRequest = new JsonObjectRequest(
+                Request.Method.POST,
+                ApiConfig.getFullUrl(ApiConfig.LOGOUT),
+                null, // No request body needed for logout
+                new Response.Listener<JSONObject>() {
+                    @Override
+                    public void onResponse(JSONObject response) {
+                        callback.onSuccess(response);
+                    }
+                },
+                new Response.ErrorListener() {
+                    @Override
+                    public void onErrorResponse(VolleyError error) {
+                        String errorMessage = "Logout error: " + error.getMessage();
+                        if (error.networkResponse != null && error.networkResponse.data != null) {
+                            errorMessage = new String(error.networkResponse.data);
+                        }
+                        callback.onError(errorMessage);
+                    }
+                }
+        ) {
+            @Override
+            public Map<String, String> getHeaders() {
+                Map<String, String> headers = new HashMap<>();
+                // Use the user's own token and ID for logout
+                headers.put("X-Auth-Token", authToken);
+                headers.put("X-User-Id", userId);
+                headers.put("Content-Type", "application/json");
+                return headers;
+            }
+        };
+
+        requestQueue.add(logoutRequest);
+    }
 
     // Cancel all pending requests
     public void cancelAllRequests() {
