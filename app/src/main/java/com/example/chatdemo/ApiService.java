@@ -409,6 +409,143 @@ public class ApiService {
         requestQueue.add(logoutRequest);
     }
 
+    public void inviteToGroup(String roomId, List<String> userIds, String authToken, String userId,
+                              ApiCallback<JSONObject> callback) {
+        JSONObject requestBody = new JSONObject();
+        try {
+            requestBody.put("roomId", roomId);
+
+            JSONArray userIdsArray = new JSONArray();
+            for (String id : userIds) {
+                userIdsArray.put(id);
+            }
+            requestBody.put("userIds", userIdsArray);
+
+        } catch (JSONException e) {
+            callback.onError("Error creating invite request: " + e.getMessage());
+            return;
+        }
+
+        JsonObjectRequest inviteRequest = new JsonObjectRequest(
+                Request.Method.POST,
+                ApiConfig.getFullUrl(ApiConfig.GROUPS_INVITE),
+                requestBody,
+                new Response.Listener<JSONObject>() {
+                    @Override
+                    public void onResponse(JSONObject response) {
+                        callback.onSuccess(response);
+                    }
+                },
+                new Response.ErrorListener() {
+                    @Override
+                    public void onErrorResponse(VolleyError error) {
+                        String errorMessage = "Network error: " + error.getMessage();
+                        if (error.networkResponse != null && error.networkResponse.data != null) {
+                            errorMessage = new String(error.networkResponse.data);
+                        }
+                        callback.onError(errorMessage);
+                    }
+                }
+        ) {
+            @Override
+            public Map<String, String> getHeaders() {
+                Map<String, String> headers = new HashMap<>();
+                headers.put("X-Auth-Token", authToken);
+                headers.put("X-User-Id", userId);
+                headers.put("Content-Type", "application/json");
+                return headers;
+            }
+        };
+
+        requestQueue.add(inviteRequest);
+    }
+
+    // Optional: Add method for removing members if the API supports it
+    public void kickFromGroup(String roomId, String userId, String authToken, String hostUserId,
+                              ApiCallback<JSONObject> callback) {
+        JSONObject requestBody = new JSONObject();
+        try {
+            requestBody.put("roomId", roomId);
+            requestBody.put("userId", userId);
+
+        } catch (JSONException e) {
+            callback.onError("Error creating kick request: " + e.getMessage());
+            return;
+        }
+
+        JsonObjectRequest kickRequest = new JsonObjectRequest(
+                Request.Method.POST,
+                ApiConfig.getFullUrl(ApiConfig.GROUPS_KICK),
+                requestBody,
+                new Response.Listener<JSONObject>() {
+                    @Override
+                    public void onResponse(JSONObject response) {
+                        callback.onSuccess(response);
+                    }
+                },
+                new Response.ErrorListener() {
+                    @Override
+                    public void onErrorResponse(VolleyError error) {
+                        String errorMessage = "Network error: " + error.getMessage();
+                        if (error.networkResponse != null && error.networkResponse.data != null) {
+                            errorMessage = new String(error.networkResponse.data);
+                        }
+                        callback.onError(errorMessage);
+                    }
+                }
+        ) {
+            @Override
+            public Map<String, String> getHeaders() {
+                Map<String, String> headers = new HashMap<>();
+                headers.put("X-Auth-Token", authToken);
+                headers.put("X-User-Id", hostUserId);
+                headers.put("Content-Type", "application/json");
+                return headers;
+            }
+        };
+
+        requestQueue.add(kickRequest);
+    }
+
+    // Batch kick method (alternative approach)
+    public void kickMultipleFromGroup(String roomId, List<String> userIds, String authToken, String hostUserId,
+                                      ApiCallback<List<JSONObject>> callback) {
+        List<JSONObject> results = new ArrayList<>();
+        kickMultipleSequentially(roomId, userIds, authToken, hostUserId, results, 0, callback);
+    }
+
+    private void kickMultipleSequentially(String roomId, List<String> userIds, String authToken, String hostUserId,
+                                          List<JSONObject> results, int index, ApiCallback<List<JSONObject>> callback) {
+        if (index >= userIds.size()) {
+            callback.onSuccess(results);
+            return;
+        }
+
+        String currentUserId = userIds.get(index);
+        kickFromGroup(roomId, currentUserId, authToken, hostUserId, new ApiCallback<JSONObject>() {
+            @Override
+            public void onSuccess(JSONObject response) {
+                results.add(response);
+                kickMultipleSequentially(roomId, userIds, authToken, hostUserId, results, index + 1, callback);
+            }
+
+            @Override
+            public void onError(String errorMessage) {
+                // Create error response object
+                JSONObject errorResponse = new JSONObject();
+                try {
+                    errorResponse.put("success", false);
+                    errorResponse.put("error", errorMessage);
+                    errorResponse.put("userId", currentUserId);
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+                results.add(errorResponse);
+                kickMultipleSequentially(roomId, userIds, authToken, hostUserId, results, index + 1, callback);
+            }
+        });
+    }
+
     // Cancel all pending requests
     public void cancelAllRequests() {
         if (requestQueue != null) {

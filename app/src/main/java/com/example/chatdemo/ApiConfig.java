@@ -27,6 +27,8 @@ public class ApiConfig {
     // Host login credentials
     public static final String HOST_USERNAME = "host1";
     public static final String HOST_PASSWORD = "Demo@123";
+    public static final String GROUPS_INVITE = "api/v1/groups.invite";
+    public static final String GROUPS_KICK = "api/v1/groups.kick";
 
     public static String getFullUrl(String endpoint) {
         return BASE_URL + endpoint;

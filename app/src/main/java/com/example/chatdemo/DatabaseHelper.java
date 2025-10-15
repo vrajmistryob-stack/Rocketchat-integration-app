@@ -32,6 +32,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String COLUMN_GROUP_NAME = "group_name";
     private static final String COLUMN_USERNAMES = "usernames";
 
+
     public DatabaseHelper(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
     }

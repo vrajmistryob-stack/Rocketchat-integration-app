@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="20dp"
+    android:background="@drawable/dialog_background">
+
+    <TextView
+        android:id="@+id/tvGroupName"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Group Name"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:textColor="@color/black"
+        android:gravity="center"
+        android:layout_marginBottom="20dp" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnEnter"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Enter"
+        android:layout_marginBottom="10dp"
+        android:textColor="@color/black"
+        app:iconTint="@color/black"
+        app:icon="@drawable/ic_chat"
+        style="@style/Widget.Material3.Button.OutlinedButton" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnAdd"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Add Members"
+        android:textColor="@color/black"
+        app:iconTint="@color/black"
+        android:layout_marginBottom="10dp"
+        app:icon="@drawable/ic_add"
+        style="@style/Widget.Material3.Button.OutlinedButton" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnRemove"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Remove Members"
+        android:textColor="@color/black"
+        app:iconTint="@color/black"
+        android:layout_marginBottom="20dp"
+        app:icon="@drawable/ic_remove"
+        style="@style/Widget.Material3.Button.OutlinedButton" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnCancel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@color/black"
+        android:text="Cancel"
+        style="@style/Widget.Material3.Button.TextButton" />
+
+</LinearLayout>

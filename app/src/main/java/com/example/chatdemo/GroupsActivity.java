@@ -89,6 +89,403 @@ public class GroupsActivity extends AppCompatActivity implements GroupsAdapter.O
         showUserSelectionDialog(group);
     }
 
+    private void showHostOptionsPopup(Group group) {
+        Dialog dialog = new Dialog(this);
+        dialog.setContentView(R.layout.dialog_host_options);
+        dialog.setTitle("Group Options");
+
+        // Set dialog window properties
+        if (dialog.getWindow() != null) {
+            WindowManager.LayoutParams layoutParams = new WindowManager.LayoutParams();
+            layoutParams.copyFrom(dialog.getWindow().getAttributes());
+            layoutParams.width = WindowManager.LayoutParams.WRAP_CONTENT;
+            layoutParams.height = WindowManager.LayoutParams.WRAP_CONTENT;
+            layoutParams.gravity = Gravity.CENTER;
+            dialog.getWindow().setAttributes(layoutParams);
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        }
+
+        TextView tvGroupName = dialog.findViewById(R.id.tvGroupName);
+        MaterialButton btnEnter = dialog.findViewById(R.id.btnEnter);
+        MaterialButton btnAdd = dialog.findViewById(R.id.btnAdd);
+        MaterialButton btnRemove = dialog.findViewById(R.id.btnRemove);
+        MaterialButton btnCancel = dialog.findViewById(R.id.btnCancel);
+
+        tvGroupName.setText(group.getGroupName());
+
+        btnEnter.setOnClickListener(v -> {
+            dialog.dismiss();
+            launchGroupChatAsHost(group);
+        });
+
+        btnAdd.setOnClickListener(v -> {
+            dialog.dismiss();
+            showAddMembersDialog(group);
+        });
+
+        btnRemove.setOnClickListener(v -> {
+            dialog.dismiss();
+            showRemoveMembersDialog(group);
+        });
+
+        btnCancel.setOnClickListener(v -> dialog.dismiss());
+
+        dialog.show();
+    }
+
+    private void showAddMembersDialog(Group group) {
+        Dialog dialog = new Dialog(this);
+        dialog.setContentView(R.layout.dialog_add_members);
+        dialog.setTitle("Add Members to " + group.getGroupName());
+
+        // Set dialog window properties
+        if (dialog.getWindow() != null) {
+            WindowManager.LayoutParams layoutParams = new WindowManager.LayoutParams();
+            layoutParams.copyFrom(dialog.getWindow().getAttributes());
+            layoutParams.width = WindowManager.LayoutParams.MATCH_PARENT;
+            layoutParams.height = WindowManager.LayoutParams.WRAP_CONTENT;
+            layoutParams.gravity = Gravity.CENTER;
+            dialog.getWindow().setAttributes(layoutParams);
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        }
+
+        RecyclerView rvAvailableMembers = dialog.findViewById(R.id.rvAvailableMembers);
+        MaterialButton btnAddSelected = dialog.findViewById(R.id.btnAddSelected);
+        MaterialButton btnCancel = dialog.findViewById(R.id.btnCancel);
+
+        // Get members not in this group
+        List<User> availableMembers = getAvailableMembers(group);
+        AddMembersAdapter adapter = new AddMembersAdapter(availableMembers);
+        rvAvailableMembers.setLayoutManager(new LinearLayoutManager(this));
+        rvAvailableMembers.setAdapter(adapter);
+
+        btnAddSelected.setOnClickListener(v -> {
+            List<String> selectedUserIds = adapter.getSelectedUserIds();
+            if (!selectedUserIds.isEmpty()) {
+                addMembersToGroup(group, selectedUserIds, dialog);
+            } else {
+                Toast.makeText(this, "Please select members to add", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        btnCancel.setOnClickListener(v -> dialog.dismiss());
+
+        dialog.show();
+    }
+
+    private List<User> getAvailableMembers(Group group) {
+        List<User> allUsers = databaseHelper.getAllGuests();
+        List<User> availableMembers = new ArrayList<>();
+
+        if (group.getUsernames() != null) {
+            List<String> groupUsernames = group.getUsernames();
+            for (User user : allUsers) {
+                if (!groupUsernames.contains(user.getUsername())) {
+                    availableMembers.add(user);
+                }
+            }
+        } else {
+            availableMembers.addAll(allUsers);
+        }
+
+        return availableMembers;
+    }
+
+    private void addMembersToGroup(Group group, List<String> userIds, Dialog dialog) {
+        showProgressDialog("Adding members...");
+
+        // Get current session
+        UserSessionManager sessionManager = UserSessionManager.getInstance();
+        String authToken = sessionManager.getCurrentAuthToken();
+        String userId = sessionManager.getCurrentUserId();
+
+        if (authToken == null || userId == null) {
+            // If no session, login as host first
+            loginAsHostForGroupInvite(group, userIds, dialog);
+            return;
+        }
+
+        // Make API call to add members
+        apiService.inviteToGroup(group.getRoomId(), userIds, authToken, userId, new ApiCallback<JSONObject>() {
+            @Override
+            public void onSuccess(JSONObject response) {
+                hideProgressDialog();
+                try {
+                    if (response.getBoolean("success")) {
+                        Toast.makeText(GroupsActivity.this, "Members added successfully", Toast.LENGTH_SHORT).show();
+
+                        // Update local database
+                        updateGroupInDatabase(group, userIds);
+
+                        // Close all dialogs and refresh
+                        dialog.dismiss();
+                        loadGroupsFromDatabase();
+                    } else {
+                        Toast.makeText(GroupsActivity.this, "Failed to add members", Toast.LENGTH_SHORT).show();
+                    }
+                } catch (Exception e) {
+                    Toast.makeText(GroupsActivity.this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onError(String errorMessage) {
+                hideProgressDialog();
+                Toast.makeText(GroupsActivity.this, "Error adding members: " + errorMessage, Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void loginAsHostForGroupInvite(Group group, List<String> userIds, Dialog dialog) {
+        showProgressDialog("Logging in as host...");
+
+        apiService.loginUser(ApiConfig.HOST_USERNAME, ApiConfig.HOST_PASSWORD, new ApiCallback<JSONObject>() {
+            @Override
+            public void onSuccess(JSONObject response) {
+                try {
+                    if (response.getBoolean("success")) {
+                        String hostToken = response.getJSONObject("data").getString("authToken");
+                        String hostUserId = response.getJSONObject("data").getString("userId");
+
+                        // Set session
+                        UserSessionManager.getInstance().setCurrentUser(hostToken, hostUserId, ApiConfig.HOST_USERNAME);
+
+                        // Retry adding members
+                        addMembersToGroup(group, userIds, dialog);
+                    } else {
+                        hideProgressDialog();
+                        Toast.makeText(GroupsActivity.this, "Host login failed", Toast.LENGTH_SHORT).show();
+                    }
+                } catch (Exception e) {
+                    hideProgressDialog();
+                    Toast.makeText(GroupsActivity.this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onError(String errorMessage) {
+                hideProgressDialog();
+                Toast.makeText(GroupsActivity.this, "Host login error: " + errorMessage, Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void updateGroupInDatabase(Group group, List<String> newUserIds) {
+        // Get current group from database to ensure we have latest data
+        Group currentGroup = databaseHelper.getGroupById(group.getGroupId());
+        if (currentGroup == null) {
+            currentGroup = group;
+        }
+
+        List<String> currentUsernames = currentGroup.getUsernames() != null ?
+                new ArrayList<>(currentGroup.getUsernames()) : new ArrayList<>();
+
+        // Add new members by mapping userIds to usernames
+        List<User> allUsers = databaseHelper.getAllUsers();
+        for (String userId : newUserIds) {
+            for (User user : allUsers) {
+                if (user.getUserId().equals(userId) && !currentUsernames.contains(user.getUsername())) {
+                    currentUsernames.add(user.getUsername());
+                    break;
+                }
+            }
+        }
+
+        // Update group in database
+        currentGroup.setUsernames(currentUsernames);
+        updateGroupInDatabase(currentGroup);
+    }
+
+    private void updateGroupInDatabase(Group group) {
+        // Since your DatabaseHelper doesn't have updateGroup method, we'll delete and re-add
+        databaseHelper.deleteGroup(group.getGroupId());
+        databaseHelper.addGroup(group);
+    }
+
+    private void showRemoveMembersDialog(Group group) {
+        Dialog dialog = new Dialog(this);
+        dialog.setContentView(R.layout.dialog_remove_members);
+        dialog.setTitle("Remove Members from " + group.getGroupName());
+
+        // Set dialog window properties
+        if (dialog.getWindow() != null) {
+            WindowManager.LayoutParams layoutParams = new WindowManager.LayoutParams();
+            layoutParams.copyFrom(dialog.getWindow().getAttributes());
+            layoutParams.width = WindowManager.LayoutParams.MATCH_PARENT;
+            layoutParams.height = WindowManager.LayoutParams.MATCH_PARENT;
+            layoutParams.gravity = Gravity.CENTER;
+            dialog.getWindow().setAttributes(layoutParams);
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        }
+
+        RecyclerView rvCurrentMembers = dialog.findViewById(R.id.rvCurrentMembers);
+        MaterialButton btnRemoveSelected = dialog.findViewById(R.id.btnRemoveSelected);
+        MaterialButton btnCancel = dialog.findViewById(R.id.btnCancel);
+
+        // Get current group members (excluding host)
+        List<User> currentMembers = getCurrentMembersForRemoval(group);
+        RemoveMembersAdapter adapter = new RemoveMembersAdapter(currentMembers);
+        rvCurrentMembers.setLayoutManager(new LinearLayoutManager(this));
+        rvCurrentMembers.setAdapter(adapter);
+
+        btnRemoveSelected.setOnClickListener(v -> {
+            List<String> selectedUserIds = adapter.getSelectedUserIds();
+            if (!selectedUserIds.isEmpty()) {
+                removeMembersFromGroup(group, selectedUserIds, dialog);
+            } else {
+                Toast.makeText(this, "Please select members to remove", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        btnCancel.setOnClickListener(v -> dialog.dismiss());
+
+        dialog.show();
+    }
+
+    private List<User> getCurrentMembersForRemoval(Group group) {
+        List<User> currentMembers = getUsersFromGroup(group);
+        List<User> membersForRemoval = new ArrayList<>();
+
+        // Filter out host from removal list (host cannot be removed)
+        for (User user : currentMembers) {
+            if (!user.getUsername().equals(ApiConfig.HOST_USERNAME)) {
+                membersForRemoval.add(user);
+            }
+        }
+
+        return membersForRemoval;
+    }
+
+    private void removeMembersFromGroup(Group group, List<String> userIds, Dialog dialog) {
+        showProgressDialog("Removing members...");
+
+        // Get current session
+        UserSessionManager sessionManager = UserSessionManager.getInstance();
+        String authToken = sessionManager.getCurrentAuthToken();
+        String userId = sessionManager.getCurrentUserId();
+
+        if (authToken == null || userId == null) {
+            // If no session, login as host first
+            loginAsHostForGroupKick(group, userIds, dialog);
+            return;
+        }
+
+        // Remove members one by one using for loop
+        removeMembersSequentially(group, userIds, authToken, userId, dialog, 0);
+    }
+
+    private void removeMembersSequentially(Group group, List<String> userIds, String authToken,
+                                           String hostUserId, Dialog dialog, int index) {
+        if (index >= userIds.size()) {
+            // All members removed successfully
+            hideProgressDialog();
+            Toast.makeText(this, "Members removed successfully", Toast.LENGTH_SHORT).show();
+
+            // Update local database and refresh
+            updateGroupAfterRemoval(group, userIds);
+            dialog.dismiss();
+            loadGroupsFromDatabase();
+            return;
+        }
+
+        String currentUserId = userIds.get(index);
+        apiService.kickFromGroup(group.getRoomId(), currentUserId, authToken, hostUserId,
+                new ApiCallback<JSONObject>() {
+                    @Override
+                    public void onSuccess(JSONObject response) {
+                        try {
+                            if (response.getBoolean("success")) {
+                                // Successfully removed this user, proceed to next
+                                removeMembersSequentially(group, userIds, authToken, hostUserId, dialog, index + 1);
+                            } else {
+                                // Failed to remove this user, but continue with others
+                                Toast.makeText(GroupsActivity.this,
+                                        "Failed to remove one member, continuing with others",
+                                        Toast.LENGTH_SHORT).show();
+                                removeMembersSequentially(group, userIds, authToken, hostUserId, dialog, index + 1);
+                            }
+                        } catch (Exception e) {
+                            // Error parsing response, but continue with others
+                            Toast.makeText(GroupsActivity.this,
+                                    "Error removing one member: " + e.getMessage(),
+                                    Toast.LENGTH_SHORT).show();
+                            removeMembersSequentially(group, userIds, authToken, hostUserId, dialog, index + 1);
+                        }
+                    }
+
+                    @Override
+                    public void onError(String errorMessage) {
+                        // Network error for this user, but continue with others
+                        Toast.makeText(GroupsActivity.this,
+                                "Network error for one member: " + errorMessage,
+                                Toast.LENGTH_SHORT).show();
+                        removeMembersSequentially(group, userIds, authToken, hostUserId, dialog, index + 1);
+                    }
+                });
+    }
+
+    private void loginAsHostForGroupKick(Group group, List<String> userIds, Dialog dialog) {
+        showProgressDialog("Logging in as host...");
+
+        apiService.loginUser(ApiConfig.HOST_USERNAME, ApiConfig.HOST_PASSWORD, new ApiCallback<JSONObject>() {
+            @Override
+            public void onSuccess(JSONObject response) {
+                try {
+                    if (response.getBoolean("success")) {
+                        String hostToken = response.getJSONObject("data").getString("authToken");
+                        String hostUserId = response.getJSONObject("data").getString("userId");
+
+                        // Set session
+                        UserSessionManager.getInstance().setCurrentUser(hostToken, hostUserId, ApiConfig.HOST_USERNAME);
+
+                        // Retry removing members
+                        removeMembersFromGroup(group, userIds, dialog);
+                    } else {
+                        hideProgressDialog();
+                        Toast.makeText(GroupsActivity.this, "Host login failed", Toast.LENGTH_SHORT).show();
+                    }
+                } catch (Exception e) {
+                    hideProgressDialog();
+                    Toast.makeText(GroupsActivity.this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onError(String errorMessage) {
+                hideProgressDialog();
+                Toast.makeText(GroupsActivity.this, "Host login error: " + errorMessage, Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void updateGroupAfterRemoval(Group group, List<String> userIdsToRemove) {
+        Group currentGroup = databaseHelper.getGroupById(group.getGroupId());
+        if (currentGroup == null) return;
+
+        List<String> currentUsernames = currentGroup.getUsernames() != null ?
+                new ArrayList<>(currentGroup.getUsernames()) : new ArrayList<>();
+
+        // Map userIds to usernames for removal
+        List<User> allUsers = databaseHelper.getAllUsers();
+        List<String> usernamesToRemove = new ArrayList<>();
+
+        for (String userId : userIdsToRemove) {
+            for (User user : allUsers) {
+                if (user.getUserId().equals(userId)) {
+                    usernamesToRemove.add(user.getUsername());
+                    break;
+                }
+            }
+        }
+
+        // Remove the usernames
+        currentUsernames.removeAll(usernamesToRemove);
+
+        // Update group in database
+        currentGroup.setUsernames(currentUsernames);
+        updateGroupInDatabase(currentGroup);
+    }
+
     private void showUserSelectionDialog(Group group) {
         Dialog dialog = new Dialog(this);
         dialog.setContentView(R.layout.dialog_user_selection);
@@ -139,7 +536,7 @@ public class GroupsActivity extends AppCompatActivity implements GroupsAdapter.O
             @Override
             public void onClick(View v) {
                 dialog.dismiss();
-                launchGroupChatAsHost(group);
+                showHostOptionsPopup(group);
             }
         });
 
