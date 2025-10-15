@@ -5,6 +5,8 @@ import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
+
+import com.example.chatdemo.model.BroadcastGroup;
 import com.google.gson.Gson;
 import com.example.chatdemo.model.Group;
 import com.example.chatdemo.model.User;
@@ -13,7 +15,7 @@ import java.util.List;
 
 public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String DATABASE_NAME = "ChatDemo.db";
-    private static final int DATABASE_VERSION = 3;
+    private static final int DATABASE_VERSION = 4;
 
     // Table names and columns
     private static final String TABLE_USERS = "users";
@@ -31,6 +33,14 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String COLUMN_ROOM_ID = "room_id";
     private static final String COLUMN_GROUP_NAME = "group_name";
     private static final String COLUMN_USERNAMES = "usernames";
+    private static final String TABLE_BROADCAST_GROUPS = "broadcast_groups";
+
+    // Broadcast table columns
+    private static final String COLUMN_BROADCAST_ID = "broadcast_id";
+    private static final String COLUMN_BROADCAST_NAME = "broadcast_name";
+    private static final String COLUMN_CHANNEL_ID = "channel_id";
+    private static final String COLUMN_GUEST_LIST = "guest_list";
+    private static final String COLUMN_CREATED_AT = "created_at";
 
 
     public DatabaseHelper(Context context) {
@@ -55,15 +65,22 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 + COLUMN_GROUP_NAME + " TEXT,"
                 + COLUMN_USERNAMES + " TEXT" + ")";
         db.execSQL(CREATE_GROUPS_TABLE);
+
+        // Create broadcast_groups table
+        String CREATE_BROADCAST_TABLE = "CREATE TABLE " + TABLE_BROADCAST_GROUPS + "("
+                + COLUMN_BROADCAST_ID + " TEXT PRIMARY KEY,"
+                + COLUMN_BROADCAST_NAME + " TEXT,"
+                + COLUMN_CHANNEL_ID + " TEXT,"
+                + COLUMN_GUEST_LIST + " TEXT,"
+                + COLUMN_CREATED_AT + " DATETIME DEFAULT CURRENT_TIMESTAMP" + ")";
+        db.execSQL(CREATE_BROADCAST_TABLE);
     }
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        // Drop older tables if they exist
         db.execSQL("DROP TABLE IF EXISTS " + TABLE_USERS);
         db.execSQL("DROP TABLE IF EXISTS " + TABLE_GROUPS);
-
-        // Create tables again
+        db.execSQL("DROP TABLE IF EXISTS " + TABLE_BROADCAST_GROUPS);
         onCreate(db);
     }
 
@@ -282,5 +299,54 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         cursor.close();
         db.close();
         return group;
+    }
+    // Add Broadcast model methods to DatabaseHelper
+    public void addBroadcastGroup(String broadcastId, String broadcastName, String channelId, List<String> guestList) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put(COLUMN_BROADCAST_ID, broadcastId);
+        values.put(COLUMN_BROADCAST_NAME, broadcastName);
+        values.put(COLUMN_CHANNEL_ID, channelId);
+
+        // Convert guest list to JSON string
+        Gson gson = new Gson();
+        String guestListJson = gson.toJson(guestList);
+        values.put(COLUMN_GUEST_LIST, guestListJson);
+
+        db.insert(TABLE_BROADCAST_GROUPS, null, values);
+        db.close();
+    }
+    public List<BroadcastGroup> getAllBroadcastGroups() {
+        List<BroadcastGroup> broadcastList = new ArrayList<>();
+        SQLiteDatabase db = this.getReadableDatabase();
+
+        Cursor cursor = db.query(TABLE_BROADCAST_GROUPS, null, null, null, null, null, COLUMN_CREATED_AT + " DESC");
+
+        if (cursor.moveToFirst()) {
+            do {
+                BroadcastGroup broadcast = new BroadcastGroup();
+                broadcast.setBroadcastId(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_BROADCAST_ID)));
+                broadcast.setBroadcastName(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_BROADCAST_NAME)));
+                broadcast.setChannelId(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_CHANNEL_ID)));
+
+                // Convert JSON string back to list
+                String guestListJson = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_GUEST_LIST));
+                Gson gson = new Gson();
+                List<String> guestList = gson.fromJson(guestListJson, List.class);
+                broadcast.setGuestList(guestList);
+
+                broadcastList.add(broadcast);
+            } while (cursor.moveToNext());
+        }
+        cursor.close();
+        db.close();
+        return broadcastList;
+    }
+
+    public boolean deleteBroadcastGroup(String broadcastId) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        int rowsAffected = db.delete(TABLE_BROADCAST_GROUPS, COLUMN_BROADCAST_ID + " = ?", new String[]{broadcastId});
+        db.close();
+        return rowsAffected > 0;
     }
 }

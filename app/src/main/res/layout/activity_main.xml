@@ -7,44 +7,48 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     tools:context=".MainActivity">
-    <LinearLayout
+    <HorizontalScrollView
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal">
-        <com.google.android.material.button.MaterialButton
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            app:icon="@android:drawable/ic_input_add"
-            android:text="Guest"
-            android:tooltipText="add guest"
-            android:layout_margin="10dp"
-            android:id="@+id/btn_addguest"/>
-        <Space
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"/>
-        <!-- Add this button to your existing layout -->
-        <com.google.android.material.button.MaterialButton
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Groups"
-            android:tooltipText="View groups"
-            android:layout_margin="10dp"
-            android:id="@+id/btn_groups"/>
-        android:id="@+id/btn_addguest"/>
-        <Space
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"/>
+        android:layout_height="wrap_content">
 
-        <com.google.android.material.button.MaterialButton
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Host"
-            android:tooltipText="open with host"
-            android:layout_margin="10dp"
-            android:id="@+id/btn_host"/>
-    </LinearLayout>
+            android:orientation="horizontal">
+            <com.google.android.material.button.MaterialButton
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:icon="@android:drawable/ic_input_add"
+                android:text="Guest"
+                android:tooltipText="add guest"
+                android:layout_margin="10dp"
+                android:id="@+id/btn_addguest"/>
+            <!-- Add this button to your existing layout -->
+            <com.google.android.material.button.MaterialButton
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Groups"
+                android:tooltipText="View groups"
+                android:layout_margin="10dp"
+                android:id="@+id/btn_groups"/>
+
+            <com.google.android.material.button.MaterialButton
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Broadcast"
+                android:tooltipText="open with host"
+                android:layout_margin="10dp"
+                android:id="@+id/btn_broadcast"/>
+
+            <com.google.android.material.button.MaterialButton
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Host"
+                android:tooltipText="open with host"
+                android:layout_margin="10dp"
+                android:id="@+id/btn_host"/>
+        </LinearLayout>
+    </HorizontalScrollView>
     <androidx.recyclerview.widget.RecyclerView
         android:layout_width="match_parent"
         android:layout_height="match_parent"

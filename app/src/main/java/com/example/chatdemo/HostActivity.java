@@ -1,6 +1,7 @@
 package com.example.chatdemo;
 
 import android.app.ProgressDialog;
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Toast;
@@ -13,6 +14,7 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.example.chatdemo.model.BroadcastGroup;
 import com.example.chatdemo.model.CreateGroupResponse;
 import com.example.chatdemo.model.Group;
 import com.example.chatdemo.model.User;
@@ -35,6 +37,8 @@ public class HostActivity extends AppCompatActivity implements UserSelectionAdap
     private DatabaseHelper databaseHelper;
     private ProgressDialog progressDialog;
     private ApiService apiService;
+    private MaterialButton btnBroadcast;
+    private int broadcastCounter = 1;
 
     // Host information
     private static final String HOST_USERNAME = "host1";
@@ -56,12 +60,14 @@ public class HostActivity extends AppCompatActivity implements UserSelectionAdap
         initializeViews();
         setupRecyclerView();
         loadUsersFromDatabase();
+        loadBroadcastCounter();
     }
 
     private void initializeViews() {
         chipGroupSelectedUsers = findViewById(R.id.chipGroupSelectedUsers);
         rvUsers = findViewById(R.id.rvUsers);
         btnDoneSelection = findViewById(R.id.btnDoneSelection);
+        btnBroadcast = findViewById(R.id.btnBroadcast);
 
         databaseHelper = new DatabaseHelper(this);
         apiService = ApiService.getInstance(this);
@@ -74,6 +80,16 @@ public class HostActivity extends AppCompatActivity implements UserSelectionAdap
                     Toast.makeText(HostActivity.this, "Please select at least one user", Toast.LENGTH_SHORT).show();
                 } else {
                     handleUserSelection();
+                }
+            }
+        });
+        btnBroadcast.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (selectedUsers.isEmpty()) {
+                    Toast.makeText(HostActivity.this, "Please select guests for broadcast", Toast.LENGTH_SHORT).show();
+                } else {
+                    createBroadcastGroup();
                 }
             }
         });
@@ -120,7 +136,177 @@ public class HostActivity extends AppCompatActivity implements UserSelectionAdap
         this.selectedUsers = selectedUsers;
         updateSelectedUsersChips();
         updateButtonState();
+
+        // Show broadcast button when users are selected, hide when empty
+        if (selectedUsers.size() > 0) {
+            btnBroadcast.setVisibility(View.VISIBLE);
+        } else {
+            btnBroadcast.setVisibility(View.GONE);
+        }
     }
+
+    private void createBroadcastGroup() {
+        showProgressDialog("Creating broadcast group...");
+
+        String broadcastName = "broadcast" + broadcastCounter;
+
+        // First create group with host and testbot
+        apiService.createBroadcastGroup(broadcastName, new ApiCallback<CreateGroupResponse>() {
+            @Override
+            public void onSuccess(CreateGroupResponse response) {
+                String channelId = response.getGroup().getId();
+                String broadcastId = response.getGroup().getId(); // Using group ID as broadcast ID
+
+                // Extract guest usernames
+                List<String> guestUsernames = new ArrayList<>();
+                for (User user : selectedUsers) {
+                    guestUsernames.add(user.getUsername());
+                }
+
+                // Save to local database
+                databaseHelper.addBroadcastGroup(broadcastId, broadcastName, channelId, guestUsernames);
+
+                // Call Flask API
+                callFlaskBroadcastApi(channelId, guestUsernames, broadcastId, broadcastName);
+            }
+
+            @Override
+            public void onError(String errorMessage) {
+                hideProgressDialog();
+                Toast.makeText(HostActivity.this, "Error creating broadcast group: " + errorMessage, Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+    private void callFlaskBroadcastApi(String channelId, List<String> guestUsernames, String broadcastId, String broadcastName) {
+        // Get host information from session or login
+        UserSessionManager sessionManager = UserSessionManager.getInstance();
+        String hostId = sessionManager.getCurrentUserId();
+        String hostToken = sessionManager.getCurrentAuthToken();
+
+        // If no active session, login as host first
+        if (hostId == null || hostToken == null) {
+            loginHostForBroadcast(channelId, guestUsernames, broadcastId, broadcastName);
+            return;
+        }
+
+        // Call Flask API
+        apiService.setupBroadcast(hostId, hostToken, guestUsernames, channelId, new ApiCallback<JSONObject>() {
+            @Override
+            public void onSuccess(JSONObject response) {
+                hideProgressDialog();
+                try {
+                    if (response.getString("status").equals("success")) {
+                        broadcastCounter++;
+
+                        // Clear selection
+                        selectedUsers.clear();
+                        updateSelectedUsersChips();
+                        userSelectionAdapter.notifyDataSetChanged();
+                        updateButtonState();
+                        btnBroadcast.setVisibility(View.GONE);
+
+                        Toast.makeText(HostActivity.this,
+                                "Broadcast group '" + broadcastName + "' created successfully!",
+                                Toast.LENGTH_LONG).show();
+
+                        // Show option to view broadcast groups
+                        showBroadcastSuccessDialog();
+                    } else {
+                        Toast.makeText(HostActivity.this,
+                                "Failed to setup broadcast: " + response.getString("message"),
+                                Toast.LENGTH_LONG).show();
+                    }
+                } catch (Exception e) {
+                    Toast.makeText(HostActivity.this,
+                            "Error parsing response: " + e.getMessage(),
+                            Toast.LENGTH_LONG).show();
+                }
+            }
+
+            @Override
+            public void onError(String errorMessage) {
+                hideProgressDialog();
+                Toast.makeText(HostActivity.this,
+                        "Error calling broadcast API: " + errorMessage,
+                        Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    private void loginHostForBroadcast(String channelId, List<String> guestUsernames, String broadcastId, String broadcastName) {
+        showProgressDialog("Logging in as host...");
+
+        apiService.loginUser(HOST_USERNAME, HOST_PASSWORD, new ApiCallback<JSONObject>() {
+            @Override
+            public void onSuccess(JSONObject response) {
+                try {
+                    if (response.getBoolean("success")) {
+                        String hostToken = response.getJSONObject("data").getString("authToken");
+                        String hostId = response.getJSONObject("data").getString("userId");
+
+                        // Set session
+                        UserSessionManager.getInstance().setCurrentUser(hostToken, hostId, HOST_USERNAME);
+
+                        // Retry Flask API call
+                        callFlaskBroadcastApi(channelId, guestUsernames, broadcastId, broadcastName);
+                    } else {
+                        hideProgressDialog();
+                        Toast.makeText(HostActivity.this, "Host login failed", Toast.LENGTH_SHORT).show();
+                    }
+                } catch (Exception e) {
+                    hideProgressDialog();
+                    Toast.makeText(HostActivity.this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onError(String errorMessage) {
+                hideProgressDialog();
+                Toast.makeText(HostActivity.this, "Host login error: " + errorMessage, Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void showBroadcastSuccessDialog() {
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Broadcast Created")
+                .setMessage("Broadcast group created successfully! Do you want to view all broadcast groups?")
+                .setPositiveButton("View Broadcasts", (dialog, which) -> {
+                    openBroadcastListActivity();
+                })
+                .setNegativeButton("Later", null)
+                .show();
+    }
+
+    private void openBroadcastListActivity() {
+        Intent intent = new Intent(HostActivity.this, BroadcastListActivity.class);
+        startActivity(intent);
+    }
+
+    // Load broadcast counter from database
+    private void loadBroadcastCounter() {
+        List<BroadcastGroup> existingBroadcasts = databaseHelper.getAllBroadcastGroups();
+        if (!existingBroadcasts.isEmpty()) {
+            int maxNumber = 0;
+            for (BroadcastGroup broadcast : existingBroadcasts) {
+                if (broadcast.getBroadcastName().startsWith("broadcast")) {
+                    try {
+                        String numberStr = broadcast.getBroadcastName().replace("broadcast", "");
+                        int number = Integer.parseInt(numberStr);
+                        if (number > maxNumber) {
+                            maxNumber = number;
+                        }
+                    } catch (NumberFormatException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+            broadcastCounter = maxNumber + 1;
+        } else {
+            broadcastCounter = 1;
+        }
+    }
+
 
     private void updateSelectedUsersChips() {
         chipGroupSelectedUsers.removeAllViews();
@@ -315,6 +501,7 @@ public class HostActivity extends AppCompatActivity implements UserSelectionAdap
                             try {
                                 if (response.getBoolean("success")) {
                                     String hostToken = response.getJSONObject("data").getString("authToken");
+                                    // Use ChatUtil for consistent group chat launching
                                     ChatUtil.launchGroupChat(HostActivity.this, groupName, hostToken);
                                 } else {
                                     Toast.makeText(HostActivity.this, "Host login failed", Toast.LENGTH_SHORT).show();

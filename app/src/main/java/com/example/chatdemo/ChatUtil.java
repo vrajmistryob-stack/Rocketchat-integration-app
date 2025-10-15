@@ -3,13 +3,14 @@ package com.example.chatdemo;
 import android.content.Context;
 import android.content.Intent;
 
+import com.example.chatdemo.model.BroadcastGroup;
 import com.example.chatdemo.model.Group;
 
 public class ChatUtil {
 
 //    private static final String DEFAULT_BASE_URL = "http://192.168.0.112:3000";
     // ngrok https secure base URL
-    public static final String DEFAULT_BASE_URL = " https://tena-rheumatoid-spongingly.ngrok-free.dev";
+    public static final String DEFAULT_BASE_URL = " https://7782b028d22f.ngrok-free.app";
 
 
     /**
@@ -105,6 +106,21 @@ public class ChatUtil {
      */
     public static void launchGroupChat(Context context, Group group, String token) {
         String chatUrl = buildGroupChatUrl(group.getGroupName(), token);
+        launchChatWithUrl(context, chatUrl);
+    }
+    /**
+     * Launches broadcast group chat (same as group chat but specifically for broadcast groups)
+     */
+    public static void launchBroadcastChat(Context context, String broadcastName, String token) {
+        // Broadcast groups work exactly like regular groups in Rocket.Chat
+        launchGroupChat(context, broadcastName, token);
+    }
+
+    /**
+     * Convenience method to launch broadcast chat using BroadcastGroup object
+     */
+    public static void launchBroadcastChat(Context context, BroadcastGroup broadcast, String token) {
+        String chatUrl = buildGroupChatUrl(broadcast.getBroadcastName(), token);
         launchChatWithUrl(context, chatUrl);
     }
 }

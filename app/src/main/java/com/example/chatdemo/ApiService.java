@@ -1,3 +1,4 @@
+
 package com.example.chatdemo;
 
 import android.content.Context;
@@ -39,6 +40,41 @@ public class ApiService {
             instance = new ApiService(context);
         }
         return instance;
+    }
+
+    // Generic POST request method for external APIs
+    public void makePostRequest(String url, JSONObject requestBody, ApiCallback<JSONObject> callback) {
+        JsonObjectRequest jsonObjectRequest = new JsonObjectRequest(
+                Request.Method.POST,
+                url,
+                requestBody,
+                new Response.Listener<JSONObject>() {
+                    @Override
+                    public void onResponse(JSONObject response) {
+                        callback.onSuccess(response);
+                    }
+                },
+                new Response.ErrorListener() {
+                    @Override
+                    public void onErrorResponse(VolleyError error) {
+                        String errorMessage = "Network error: " + error.getMessage();
+                        if (error.networkResponse != null && error.networkResponse.data != null) {
+                            errorMessage = new String(error.networkResponse.data);
+                        }
+                        callback.onError(errorMessage);
+                    }
+                }
+        ) {
+            @Override
+            public Map<String, String> getHeaders() {
+                Map<String, String> headers = new HashMap<>();
+                headers.put("Content-Type", "application/json");
+                // Add any additional headers needed for external APIs
+                return headers;
+            }
+        };
+
+        requestQueue.add(jsonObjectRequest);
     }
 
     // Create User API - Uses ADMIN credentials
@@ -107,7 +143,6 @@ public class ApiService {
             @Override
             public Map<String, String> getHeaders() {
                 Map<String, String> headers = new HashMap<>();
-                // ✅ Use ADMIN credentials for user creation only
                 headers.put("X-Auth-Token", ApiConfig.ADMIN_AUTH_TOKEN);
                 headers.put("X-User-Id", ApiConfig.ADMIN_USER_ID);
                 headers.put("Content-Type", "application/json");
@@ -168,7 +203,6 @@ public class ApiService {
             @Override
             public Map<String, String> getHeaders() {
                 Map<String, String> headers = new HashMap<>();
-                // ✅ Use HOST credentials for room creation
                 headers.put("X-Auth-Token", ApiConfig.HOST_AUTH_TOKEN);
                 headers.put("X-User-Id", ApiConfig.HOST_USER_ID);
                 headers.put("Content-Type", "application/json");
@@ -229,7 +263,6 @@ public class ApiService {
             @Override
             public Map<String, String> getHeaders() {
                 Map<String, String> headers = new HashMap<>();
-                // ✅ Use HOST credentials for group creation
                 headers.put("X-Auth-Token", ApiConfig.HOST_AUTH_TOKEN);
                 headers.put("X-User-Id", ApiConfig.HOST_USER_ID);
                 headers.put("Content-Type", "application/json");
@@ -545,7 +578,30 @@ public class ApiService {
             }
         });
     }
+    public void createBroadcastGroup(String broadcastName, ApiCallback<CreateGroupResponse> callback) {
+        // Create group with host and testbot only
+        List<String> members = new ArrayList<>();
+        members.add("testbot"); // Add testbot as member
 
+        createGroup(broadcastName, members, callback);
+    }
+
+    public void setupBroadcast(String hostId, String hostToken, List<String> guestList,
+                               String channelId, ApiCallback<JSONObject> callback) {
+        JSONObject requestBody = new JSONObject();
+        try {
+            requestBody.put("host_id", hostId);
+            requestBody.put("host_token", hostToken);
+            requestBody.put("guest_list", new JSONArray(guestList));
+            requestBody.put("channel_id", channelId);
+        } catch (JSONException e) {
+            callback.onError("Error creating request: " + e.getMessage());
+            return;
+        }
+
+        makePostRequest(ApiConfig.BROADCAST_SETUP_URL, requestBody, callback);
+    }
+    // Generic POST request method for external APIs (like your Flask API)
     // Cancel all pending requests
     public void cancelAllRequests() {
         if (requestQueue != null) {

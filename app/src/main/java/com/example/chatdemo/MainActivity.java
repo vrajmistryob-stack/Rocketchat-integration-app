@@ -19,8 +19,8 @@ import com.android.volley.Response;
 import com.android.volley.VolleyError;
 import com.android.volley.toolbox.JsonObjectRequest;
 import com.android.volley.toolbox.Volley;
+import com.example.chatdemo.model.BroadcastGroup;
 import com.example.chatdemo.model.CreateRoomResponse;
-import com.example.chatdemo.model.CreateUserResponse;
 import com.example.chatdemo.model.User;
 import com.google.android.material.button.MaterialButton;
 
@@ -32,7 +32,7 @@ import java.util.List;
 import java.util.Map;
 
 public class MainActivity extends AppCompatActivity {
-    private MaterialButton btnAddGuest, btnHost, btnGroups;
+    private MaterialButton btnAddGuest, btnHost, btnGroups, btnBroadcast;
     private RecyclerView rvGuests;
     private UsersAdapter usersAdapter;
     private List<User> guestList;
@@ -44,7 +44,7 @@ public class MainActivity extends AppCompatActivity {
 //    private static final String BASE_URL = "http://192.168.0.112:3000/";
 
     // ngrok https secure base URL
-    public static final String BASE_URL = "https://tena-rheumatoid-spongingly.ngrok-free.dev/";
+    public static final String BASE_URL = "http://192.168.0.112:3000/";
     private static final String CREATE_USER_URL = BASE_URL + "api/v1/users.create";
     private static final String CREATE_ROOM_URL = BASE_URL + "api/v1/dm.create";
     private static final String LOGIN_URL = BASE_URL + "api/v1/login";
@@ -78,6 +78,7 @@ public class MainActivity extends AppCompatActivity {
         btnAddGuest = findViewById(R.id.btn_addguest);
         btnHost = findViewById(R.id.btn_host);
         btnGroups = findViewById(R.id.btn_groups);
+        btnBroadcast = findViewById(R.id.btn_broadcast);
         rvGuests = findViewById(R.id.rv_guests);
 
         databaseHelper = new DatabaseHelper(this);
@@ -102,6 +103,13 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
                 Intent intent = new Intent(MainActivity.this, GroupsActivity.class);
+                startActivity(intent);
+            }
+        });
+        btnBroadcast.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent intent = new Intent(MainActivity.this, BroadcastListActivity.class);
                 startActivity(intent);
             }
         });

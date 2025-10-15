@@ -11,10 +11,10 @@ public class ApiConfig {
     public static final String CREATE_ROOM = "api/v1/dm.create";
     public static final String CREATE_GROUP = "api/v1/groups.create";
     public static final String LOGIN = "api/v1/login";
-    // In ApiConfig, add the new endpoint:
     public static final String LOGOUT = "api/v1/logout";
-    // In ApiConfig, add the new endpoint:
     public static final String SET_ACTIVE_STATUS = "api/v1/users.setActiveStatus";
+    public static final String GROUPS_INVITE = "api/v1/groups.invite";
+    public static final String GROUPS_KICK = "api/v1/groups.kick";
 
     // Admin credentials - ONLY for user creation
     public static final String ADMIN_AUTH_TOKEN = "SaXIXh2Jgxhwp0mIZk-J4FOUA13pGQFIe5uZ5jtNd7Z";
@@ -27,8 +27,8 @@ public class ApiConfig {
     // Host login credentials
     public static final String HOST_USERNAME = "host1";
     public static final String HOST_PASSWORD = "Demo@123";
-    public static final String GROUPS_INVITE = "api/v1/groups.invite";
-    public static final String GROUPS_KICK = "api/v1/groups.kick";
+    // Broadcast API URL
+    public static final String BROADCAST_SETUP_URL = "https://tena-rheumatoid-spongingly.ngrok-free.dev/api/setup-broadcast";
 
     public static String getFullUrl(String endpoint) {
         return BASE_URL + endpoint;

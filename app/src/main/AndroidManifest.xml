@@ -15,6 +15,9 @@
         android:theme="@style/Theme.ChatDemo"
         android:usesCleartextTraffic="true">
         <activity
+            android:name=".BroadcastListActivity"
+            android:exported="false" />
+        <activity
             android:name=".GroupsActivity"
             android:exported="false" />
         <activity
