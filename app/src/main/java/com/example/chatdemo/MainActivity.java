@@ -20,6 +20,7 @@ import com.android.volley.VolleyError;
 import com.android.volley.toolbox.JsonObjectRequest;
 import com.android.volley.toolbox.Volley;
 import com.example.chatdemo.model.BroadcastGroup;
+import com.example.chatdemo.model.CreateGroupResponse;
 import com.example.chatdemo.model.CreateRoomResponse;
 import com.example.chatdemo.model.User;
 import com.google.android.material.button.MaterialButton;
@@ -366,40 +367,82 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-    private void createRoomForGuest(String username, String userId, String email) {
-        updateProgressDialog("Creating chat room...");
+//    private void createRoomForGuest(String username, String userId, String email) {
+//        updateProgressDialog("Creating chat room...");
+//
+//        apiService.createRoom(username, new ApiCallback<CreateRoomResponse>() {
+//            @Override
+//            public void onSuccess(CreateRoomResponse response) {
+//                hideProgressDialog();
+//                String roomId = response.getRoom().getRoomId();
+//
+//                // Save user to database WITHOUT token
+//                User user = new User(username, "guest", userId, email, roomId);
+//
+//                if (databaseHelper.userExists(username)) {
+//                    // Update existing user with new roomId
+//                    databaseHelper.updateHostRoomId(username, roomId);
+//                } else {
+//                    // Create new user record
+//                    databaseHelper.addUser(user);
+//                }
+//
+//                // Increment counter and refresh list
+//                guestCounter++;
+//                loadGuestUsers();
+//
+//                Toast.makeText(MainActivity.this, "Guest created successfully", Toast.LENGTH_SHORT).show();
+//            }
+//
+//            @Override
+//            public void onError(String errorMessage) {
+//                hideProgressDialog();
+//                Toast.makeText(MainActivity.this, "Error creating room: " + errorMessage, Toast.LENGTH_SHORT).show();
+//            }
+//        });
+//    }
+private void createRoomForGuest(String username, String userId, String email) {
+    updateProgressDialog("Creating chat room...");
 
-        apiService.createRoom(username, new ApiCallback<CreateRoomResponse>() {
-            @Override
-            public void onSuccess(CreateRoomResponse response) {
-                hideProgressDialog();
-                String roomId = response.getRoom().getRoomId();
+    // 🚀 STEP 1 — Create a group name
+    String groupName = ApiConfig.HOST_USERNAME + "_" + username;
 
-                // Save user to database WITHOUT token
-                User user = new User(username, "guest", userId, email, roomId);
+    // 🚀 STEP 2 — Add host + guest in members list
+    List<String> members = new ArrayList<>();
+    members.add(ApiConfig.HOST_USERNAME);   // host username
+    members.add(username);                  // guest username
 
-                if (databaseHelper.userExists(username)) {
-                    // Update existing user with new roomId
-                    databaseHelper.updateHostRoomId(username, roomId);
-                } else {
-                    // Create new user record
-                    databaseHelper.addUser(user);
-                }
+    // 🚀 STEP 3 — Call your existing createGroup()
+    apiService.createGroup(groupName, members, new ApiCallback<CreateGroupResponse>() {
+        @Override
+        public void onSuccess(CreateGroupResponse response) {
+            hideProgressDialog();
 
-                // Increment counter and refresh list
-                guestCounter++;
-                loadGuestUsers();
+            // Get group id
+            String groupId = response.getGroup().getId();
 
-                Toast.makeText(MainActivity.this, "Guest created successfully", Toast.LENGTH_SHORT).show();
+            // Save to DB
+            User user = new User(username, "guest", userId, email, groupId);
+
+            if (databaseHelper.userExists(username)) {
+                databaseHelper.updateHostRoomId(username, groupId);
+            } else {
+                databaseHelper.addUser(user);
             }
 
-            @Override
-            public void onError(String errorMessage) {
-                hideProgressDialog();
-                Toast.makeText(MainActivity.this, "Error creating room: " + errorMessage, Toast.LENGTH_SHORT).show();
-            }
-        });
-    }
+            guestCounter++;
+            loadGuestUsers();
+
+            Toast.makeText(MainActivity.this, "Group created successfully", Toast.LENGTH_SHORT).show();
+        }
+
+        @Override
+        public void onError(String errorMessage) {
+            hideProgressDialog();
+            Toast.makeText(MainActivity.this, "Error creating group: " + errorMessage, Toast.LENGTH_SHORT).show();
+        }
+    });
+}
 
     private void showProgressDialog(String message) {
         progressDialog = new ProgressDialog(this);

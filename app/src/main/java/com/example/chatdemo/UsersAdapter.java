@@ -105,6 +105,8 @@ public class UsersAdapter extends RecyclerView.Adapter<UsersAdapter.UserViewHold
             });
         } else {
             // No previous user to logout
+            // No previous user to logout
+            // No previous user to logout
             callback.onSuccess(new JSONObject());
         }
     }
