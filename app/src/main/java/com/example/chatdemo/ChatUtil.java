@@ -10,7 +10,7 @@ public class ChatUtil {
 
 //    private static final String DEFAULT_BASE_URL = "http://192.168.0.112:3000";
     // ngrok https secure base URL
-    public static final String DEFAULT_BASE_URL = " https://7782b028d22f.ngrok-free.app";
+    public static final String DEFAULT_BASE_URL = "https://b4add456da06.ngrok-free.app";
 
 
     /**
@@ -27,7 +27,7 @@ public class ChatUtil {
      * Builds direct message URL with default base URL
      */
     public static String buildDirectChatUrl(String roomId, String token) {
-        return buildDirectChatUrl(DEFAULT_BASE_URL, roomId, token);
+                     return buildDirectChatUrl(DEFAULT_BASE_URL, roomId, token);
     }
 
     /**

@@ -24,6 +24,7 @@ import com.example.chatdemo.model.CreateRoomResponse;
 import com.example.chatdemo.model.User;
 import com.google.android.material.button.MaterialButton;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import java.util.ArrayList;
@@ -154,12 +155,14 @@ public class MainActivity extends AppCompatActivity {
         String username = "guest" + guestCounter;
         String email = "guest" + guestCounter + "@gmail.com";
         String password = "Demo@123";
+        List<String> roles = new ArrayList<>();
+        roles.add("guest");
 
         // Step 1: Create user
-        createUser(username, email, password);
+        createUser(username, email, password, roles);
     }
 
-    private void createUser(String username, String email, String password) {
+    private void createUser(String username, String email, String password,List<String> roles) {
         JSONObject requestBody = new JSONObject();
         try {
             requestBody.put("name", username);
@@ -167,6 +170,13 @@ public class MainActivity extends AppCompatActivity {
             requestBody.put("password", password);
             requestBody.put("username", username);
             requestBody.put("verified", false);
+            if (roles != null && !roles.isEmpty()) {
+                JSONArray rolesArray = new JSONArray();
+                for (String role : roles) {
+                    rolesArray.put(role);
+                }
+                requestBody.put("roles", rolesArray);
+            }
 //            requestBody.put("emails", new JSONObject[]{
 //                    new JSONObject()
 //                            .put("address", email)

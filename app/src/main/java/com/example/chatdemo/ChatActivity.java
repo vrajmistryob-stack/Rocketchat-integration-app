@@ -38,7 +38,7 @@ public class ChatActivity extends AppCompatActivity {
         // in setupWebView() right before loading the URL.
 
         // Get URL from intent
-        String chatUrl = getIntent().getStringExtra("CHAT_URL");
+         String chatUrl = getIntent().getStringExtra("CHAT_URL");
         Log.i(TAG, "Attempting to load chat URL: " + chatUrl);
 
         if (chatUrl != null && !chatUrl.isEmpty()) {
