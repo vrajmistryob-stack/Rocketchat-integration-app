@@ -342,6 +342,83 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         db.close();
         return broadcastList;
     }
+    // Inside DatabaseHelper.java
+
+    public Group getGroupByName(String groupName) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        Group group = null;
+
+        Cursor cursor = db.query(TABLE_GROUPS, null,
+                COLUMN_GROUP_NAME + " = ?", new String[]{groupName},
+                null, null, null);
+
+        if (cursor.moveToFirst()) {
+            group = new Group();
+            group.setGroupId(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_GROUP_ID)));
+            group.setRoomId(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_ROOM_ID)));
+            group.setGroupName(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_GROUP_NAME)));
+
+            // Convert JSON string back to list
+            String usernamesJson = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_USERNAMES));
+            Gson gson = new Gson();
+            List<String> usernames = gson.fromJson(usernamesJson, List.class);
+            group.setUsernames(usernames);
+        }
+        cursor.close();
+        db.close();
+        return group;
+    }
+    /**
+     * Retrieves the host_room_id (DM room ID) for a list of guest usernames.
+     * @param usernames The list of usernames to look up.
+     * @return A list of host_room_id strings.
+     */
+    public List<String> getHostRoomIdsByUsername(List<String> usernames) {
+        List<String> roomIds = new ArrayList<>();
+        if (usernames == null || usernames.isEmpty()) {
+            return roomIds;
+        }
+
+        SQLiteDatabase db = this.getReadableDatabase();
+
+        // Build the SQL query for WHERE username IN ('user1', 'user2', ...)
+        // This is safer and more efficient than looping the query
+        StringBuilder whereClause = new StringBuilder(COLUMN_USERNAME + " IN (");
+        String[] selectionArgs = new String[usernames.size()];
+
+        for (int i = 0; i < usernames.size(); i++) {
+            whereClause.append("?");
+            if (i < usernames.size() - 1) {
+                whereClause.append(",");
+            }
+            selectionArgs[i] = usernames.get(i);
+        }
+        whereClause.append(")");
+
+        // Only select the COLUMN_HOST_ROOM_ID
+        String[] columns = {COLUMN_HOST_ROOM_ID};
+
+        Cursor cursor = db.query(
+                TABLE_USERS,
+                columns,
+                whereClause.toString(),
+                selectionArgs,
+                null, null, null
+        );
+
+        if (cursor.moveToFirst()) {
+            do {
+                // Check if the host_room_id is present (not null/empty)
+                String roomId = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_HOST_ROOM_ID));
+                if (roomId != null && !roomId.trim().isEmpty()) {
+                    roomIds.add(roomId);
+                }
+            } while (cursor.moveToNext());
+        }
+        cursor.close();
+        db.close();
+        return roomIds;
+    }
 
     public boolean deleteBroadcastGroup(String broadcastId) {
         SQLiteDatabase db = this.getWritableDatabase();

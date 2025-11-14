@@ -145,28 +145,62 @@ public class HostActivity extends AppCompatActivity implements UserSelectionAdap
         }
     }
 
+//    private void createBroadcastGroup() {
+//        showProgressDialog("Creating broadcast group...");
+//
+//        String broadcastName = "broadcast" + broadcastCounter;
+//
+//        // First create group with host and testbot
+//        apiService.createBroadcastGroup(broadcastName, new ApiCallback<CreateGroupResponse>() {
+//            @Override
+//            public void onSuccess(CreateGroupResponse response) {
+//                String channelId = response.getGroup().getId();
+//                String broadcastId = response.getGroup().getId(); // Using group ID as broadcast ID
+//
+//                // Extract guest usernames
+//                List<String> guestUsernames = new ArrayList<>();
+//                for (User user : selectedUsers) {
+//                    guestUsernames.add(user.getUsername());
+//                }
+//
+//                // Save to local database
+//                databaseHelper.addBroadcastGroup(broadcastId, broadcastName, channelId, guestUsernames);
+//
+//                // Call Flask API
+//                callFlaskBroadcastApi(channelId, guestUsernames, broadcastId, broadcastName);
+//            }
+//
+//            @Override
+//            public void onError(String errorMessage) {
+//                hideProgressDialog();
+//                Toast.makeText(HostActivity.this, "Error creating broadcast group: " + errorMessage, Toast.LENGTH_LONG).show();
+//            }
+//        });
+//    }
+    // Inside HostActivity.java
+
     private void createBroadcastGroup() {
         showProgressDialog("Creating broadcast group...");
 
         String broadcastName = "broadcast" + broadcastCounter;
 
-        // First create group with host and testbot
+        // 1. Extract guest usernames
+        List<String> guestUsernames = new ArrayList<>();
+        for (User user : selectedUsers) {
+            guestUsernames.add(user.getUsername());
+        }
+
+        // First create group (channel) with host and testbot
         apiService.createBroadcastGroup(broadcastName, new ApiCallback<CreateGroupResponse>() {
             @Override
             public void onSuccess(CreateGroupResponse response) {
                 String channelId = response.getGroup().getId();
                 String broadcastId = response.getGroup().getId(); // Using group ID as broadcast ID
 
-                // Extract guest usernames
-                List<String> guestUsernames = new ArrayList<>();
-                for (User user : selectedUsers) {
-                    guestUsernames.add(user.getUsername());
-                }
-
                 // Save to local database
                 databaseHelper.addBroadcastGroup(broadcastId, broadcastName, channelId, guestUsernames);
 
-                // Call Flask API
+                // 2. Call Flask API, passing usernames for later conversion to Room IDs
                 callFlaskBroadcastApi(channelId, guestUsernames, broadcastId, broadcastName);
             }
 
@@ -177,7 +211,73 @@ public class HostActivity extends AppCompatActivity implements UserSelectionAdap
             }
         });
     }
+//    private void callFlaskBroadcastApi(String channelId, List<String> guestUsernames, String broadcastId, String broadcastName) {
+//        // Get host information from session or login
+//        UserSessionManager sessionManager = UserSessionManager.getInstance();
+//        String hostId = sessionManager.getCurrentUserId();
+//        String hostToken = sessionManager.getCurrentAuthToken();
+//
+//        // If no active session, login as host first
+//        if (hostId == null || hostToken == null) {
+//            loginHostForBroadcast(channelId, guestUsernames, broadcastId, broadcastName);
+//            return;
+//        }
+//
+//        // Call Flask API
+//        apiService.setupBroadcast(hostId, hostToken, guestUsernames, channelId, new ApiCallback<JSONObject>() {
+//            @Override
+//            public void onSuccess(JSONObject response) {
+//                hideProgressDialog();
+//                try {
+//                    if (response.getString("status").equals("success")) {
+//                        broadcastCounter++;
+//
+//                        // Clear selection
+//                        selectedUsers.clear();
+//                        updateSelectedUsersChips();
+//                        userSelectionAdapter.notifyDataSetChanged();
+//                        updateButtonState();
+//                        btnBroadcast.setVisibility(View.GONE);
+//
+//                        Toast.makeText(HostActivity.this,
+//                                "Broadcast group '" + broadcastName + "' created successfully!",
+//                                Toast.LENGTH_LONG).show();
+//
+//                        // Show option to view broadcast groups
+//                        showBroadcastSuccessDialog();
+//                    } else {
+//                        Toast.makeText(HostActivity.this,
+//                                "Failed to setup broadcast: " + response.getString("message"),
+//                                Toast.LENGTH_LONG).show();
+//                    }
+//                } catch (Exception e) {
+//                    Toast.makeText(HostActivity.this,
+//                            "Error parsing response: " + e.getMessage(),
+//                            Toast.LENGTH_LONG).show();
+//                }
+//            }
+//
+//            @Override
+//            public void onError(String errorMessage) {
+//                hideProgressDialog();
+//                Toast.makeText(HostActivity.this,
+//                        "Error calling broadcast API: " + errorMessage,
+//                        Toast.LENGTH_LONG).show();
+//            }
+//        });
+//    }
+// Inside HostActivity.java
+
     private void callFlaskBroadcastApi(String channelId, List<String> guestUsernames, String broadcastId, String broadcastName) {
+        // 1. Retrieve the list of DM Room IDs (host_room_id)
+        List<String> guestRoomIdList = databaseHelper.getHostRoomIdsByUsername(guestUsernames);
+
+        if (guestRoomIdList.isEmpty()) {
+            hideProgressDialog();
+            Toast.makeText(HostActivity.this, "Error: Selected guests do not have DM Room IDs (host_room_id) recorded.", Toast.LENGTH_LONG).show();
+            return;
+        }
+
         // Get host information from session or login
         UserSessionManager sessionManager = UserSessionManager.getInstance();
         String hostId = sessionManager.getCurrentUserId();
@@ -189,8 +289,9 @@ public class HostActivity extends AppCompatActivity implements UserSelectionAdap
             return;
         }
 
-        // Call Flask API
-        apiService.setupBroadcast(hostId, hostToken, guestUsernames, channelId, new ApiCallback<JSONObject>() {
+        // 2. Call Flask API using the list of DM Room IDs
+        // The ApiService method needs to be updated to accept guestRoomIdList instead of guestUsernames
+        apiService.setupBroadcast(hostId, hostToken, guestRoomIdList, channelId, new ApiCallback<JSONObject>() { // **MODIFIED to use guestRoomIdList**
             @Override
             public void onSuccess(JSONObject response) {
                 hideProgressDialog();
@@ -232,7 +333,6 @@ public class HostActivity extends AppCompatActivity implements UserSelectionAdap
             }
         });
     }
-
     private void loginHostForBroadcast(String channelId, List<String> guestUsernames, String broadcastId, String broadcastName) {
         showProgressDialog("Logging in as host...");
 
@@ -486,7 +586,53 @@ public class HostActivity extends AppCompatActivity implements UserSelectionAdap
         });
     }
 
+//    private void launchGroupChat(String groupName) {
+//        // Show option to open group chat
+//        new androidx.appcompat.app.AlertDialog.Builder(this)
+//                .setTitle("Group Created")
+//                .setMessage("Do you want to open the group chat?")
+//                .setPositiveButton("Open Chat", (dialog, which) -> {
+//                    // Login as host before opening group chat
+//                    showProgressDialog("Logging in as host...");
+//                    apiService.loginUser(HOST_USERNAME, HOST_PASSWORD, new ApiCallback<JSONObject>() {
+//                        @Override
+//                        public void onSuccess(JSONObject response) {
+//                            hideProgressDialog();
+//                            try {
+//                                if (response.getBoolean("success")) {
+//                                    String hostToken = response.getJSONObject("data").getString("authToken");
+//                                    // Use ChatUtil for consistent group chat launching
+//                                    ChatUtil.launchGroupChat(HostActivity.this, groupName, hostToken);
+//                                } else {
+//                                    Toast.makeText(HostActivity.this, "Host login failed", Toast.LENGTH_SHORT).show();
+//                                }
+//                            } catch (Exception e) {
+//                                Toast.makeText(HostActivity.this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+//                            }
+//                        }
+//
+//                        @Override
+//                        public void onError(String errorMessage) {
+//                            hideProgressDialog();
+//                            Toast.makeText(HostActivity.this, "Host login error: " + errorMessage, Toast.LENGTH_SHORT).show();
+//                        }
+//                    });
+//                })
+//                .setNegativeButton("Later", null)
+//                .show();
+//    }
+    // Inside HostActivity.java
+
     private void launchGroupChat(String groupName) {
+        // 1. Retrieve the Group object to get the Room ID
+        Group group = databaseHelper.getGroupByName(groupName);
+
+        if (group == null || group.getRoomId() == null) {
+            Toast.makeText(HostActivity.this, "Error: Group not found or missing Room ID.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        final String roomId = group.getRoomId(); // Get the Room ID
+
         // Show option to open group chat
         new androidx.appcompat.app.AlertDialog.Builder(this)
                 .setTitle("Group Created")
@@ -501,8 +647,10 @@ public class HostActivity extends AppCompatActivity implements UserSelectionAdap
                             try {
                                 if (response.getBoolean("success")) {
                                     String hostToken = response.getJSONObject("data").getString("authToken");
-                                    // Use ChatUtil for consistent group chat launching
-                                    ChatUtil.launchGroupChat(HostActivity.this, groupName, hostToken);
+
+                                    // 2. Use ChatUtil for consistent group chat launching, passing the Room ID
+                                    ChatUtil.launchGroupChat(HostActivity.this, roomId, hostToken); // **FIXED**
+
                                 } else {
                                     Toast.makeText(HostActivity.this, "Host login failed", Toast.LENGTH_SHORT).show();
                                 }

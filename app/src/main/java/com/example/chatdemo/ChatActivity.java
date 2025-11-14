@@ -1,12 +1,14 @@
 package com.example.chatdemo;
 
 import android.annotation.SuppressLint;
+import android.content.Intent;
 import android.os.Bundle;
 import android.os.Build;
 import android.util.Log;
 import android.view.View;
 import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest; // Import needed for the new method
 import android.webkit.WebSettings;
 import android.webkit.WebStorage;
 import android.webkit.WebView;
@@ -24,6 +26,12 @@ public class ChatActivity extends AppCompatActivity {
     private MaterialButton btnBack;
     private static final String TAG = "ChatActivity";
 
+    // Local storage key name for the auth token
+    private static final String EC_TOKEN_KEY = "ec_token";
+
+    // Placeholder for the token value to be injected
+    private String ecTokenValue = "";
+
     @SuppressLint("SetJavaScriptEnabled")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -33,13 +41,20 @@ public class ChatActivity extends AppCompatActivity {
         webView = findViewById(R.id.webView);
         btnBack = findViewById(R.id.btnBack);
 
-        // NOTE: The WebStorage.getInstance().deleteAllData() call in your original onCreate
-        // has been removed here, as the comprehensive cleanup is now centralized
-        // in setupWebView() right before loading the URL.
+        Intent intent = getIntent();
 
-        // Get URL from intent
-         String chatUrl = getIntent().getStringExtra("CHAT_URL");
+        // --- 1. Get URL and EC_TOKEN from Intent ---
+        String chatUrl = intent.getStringExtra(ChatUtil.EXTRA_CHAT_URL);
+        // New: Retrieve the token passed separately via the helper method
+        String incomingToken = intent.getStringExtra(ChatUtil.EXTRA_EC_TOKEN);
+
+        if (incomingToken != null && !incomingToken.isEmpty()) {
+            ecTokenValue = incomingToken;
+        }
+
         Log.i(TAG, "Attempting to load chat URL: " + chatUrl);
+        Log.i(TAG, "Token (ec_token) for injection: " + (ecTokenValue.isEmpty() ? "[Empty/None]" : "[Present]"));
+
 
         if (chatUrl != null && !chatUrl.isEmpty()) {
             setupWebView(chatUrl);
@@ -57,6 +72,8 @@ public class ChatActivity extends AppCompatActivity {
     private void setupWebView(String url) {
 
         // 1. 🛑 CRITICAL FIX: CONSOLIDATE ALL SESSION CLEANUP BEFORE URL LOAD 🛑
+        // This is necessary because we are now relying on a fresh, unauthenticated session
+        // where we manually inject the token after page load.
 
         // Clear HTML5 Web Storage (Removes the Meteor.loginToken from the previous user)
         WebStorage.getInstance().deleteAllData();
@@ -80,21 +97,46 @@ public class ChatActivity extends AppCompatActivity {
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
 
-        // Add this line to set a custom User-Agent to bypass the ngrok warning
-//        settings.setUserAgentString("MyCustomRocketChatApp-Bypass-Client/1.0");
-
         // Ensure no local caching conflict occurs by forcing a fresh network load
         settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
 
         // Clear history (optional, for UI cleanliness)
         webView.clearHistory();
 
-        // --- Clients ---
+        // --- Clients (Updated to inject token on page finished) ---
         webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+
+                // Check if we have a token to inject
+                if (!ecTokenValue.isEmpty()) {
+                    // JavaScript command to set the item in local storage
+                    // Use the dynamic ecTokenValue retrieved from the Intent
+                    String jsCommand = "localStorage.setItem('" + EC_TOKEN_KEY + "', '" + ecTokenValue + "');";
+
+                    // Execute the script
+                    // We can also use evaluateJavascript here which is preferred for modern APIs
+                    view.evaluateJavascript(jsCommand, null);
+                    Log.d(TAG, "Injected token into local storage: " + EC_TOKEN_KEY);
+                } else {
+                    Log.d(TAG, "No token to inject.");
+                }
+            }
+
+            @SuppressWarnings("deprecation")
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
                 // Keep all navigation within the WebView (default behavior)
                 view.loadUrl(url);
+                return true;
+            }
+
+            // New method for API 24+
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                // For API 24+, use the request object to get the URL
+                view.loadUrl(request.getUrl().toString());
                 return true;
             }
         });
@@ -105,8 +147,7 @@ public class ChatActivity extends AppCompatActivity {
         Map<String, String> extraHeaders = new HashMap<>();
         extraHeaders.put("ngrok-skip-browser-warning", "true");
 
-        // Use the two-parameter loadUrl method!
-//        webView.loadUrl(url, extraHeaders);
+        // Load the URL
         webView.loadUrl(url);
 
     }
@@ -126,8 +167,6 @@ public class ChatActivity extends AppCompatActivity {
     }
 
     // --- OPTIONAL/REDUNDANT SESSION CLEANUP LOGIC on Activity Exit ---
-    // This is safe to keep, ensuring that if the user closes the app mid-session,
-    // the data is cleaned up for the *next* launch.
     @Override
     protected void onDestroy() {
         super.onDestroy();

@@ -701,15 +701,52 @@ public class GroupsActivity extends AppCompatActivity implements GroupsAdapter.O
     }
 
     // ✅ NEW: Helper methods for setting active status in GroupsActivity
+//    private void setHostActiveStatus(String userId, String hostToken, String groupName) {
+//        apiService.setActiveStatus(userId, true, new ApiCallback<JSONObject>() {
+//            @Override
+//            public void onSuccess(JSONObject response) {
+//                hideProgressDialog();
+//                try {
+//                    if (response.getBoolean("success")) {
+//                        // Host is now active, launch group chat
+//                        ChatUtil.launchGroupChat(GroupsActivity.this, groupName, hostToken);
+//                        Toast.makeText(GroupsActivity.this, "Joining as Host", Toast.LENGTH_SHORT).show();
+//                    } else {
+//                        Toast.makeText(GroupsActivity.this, "Failed to set host active status", Toast.LENGTH_SHORT).show();
+//                    }
+//                } catch (Exception e) {
+//                    Toast.makeText(GroupsActivity.this, "Error setting host active status: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+//                }
+//            }
+//
+//            @Override
+//            public void onError(String errorMessage) {
+//                hideProgressDialog();
+//                // Even if active status fails, still try to open group chat
+//                ChatUtil.launchGroupChat(GroupsActivity.this, groupName, hostToken);
+//                Toast.makeText(GroupsActivity.this, "Joining as Host (active status failed)", Toast.LENGTH_SHORT).show();
+//            }
+//        });
+//    }
     private void setHostActiveStatus(String userId, String hostToken, String groupName) {
+        // 1. Get the Group object to find the roomId
+        Group group = databaseHelper.getGroupByName(groupName); // Assuming getGroupByName exists or using getGroupById
+
+        if (group == null || group.getRoomId() == null) {
+            hideProgressDialog();
+            Toast.makeText(GroupsActivity.this, "Error: Group room ID not found for " + groupName, Toast.LENGTH_LONG).show();
+            return;
+        }
+        final String roomId = group.getRoomId();
+
         apiService.setActiveStatus(userId, true, new ApiCallback<JSONObject>() {
             @Override
             public void onSuccess(JSONObject response) {
                 hideProgressDialog();
                 try {
                     if (response.getBoolean("success")) {
-                        // Host is now active, launch group chat
-                        ChatUtil.launchGroupChat(GroupsActivity.this, groupName, hostToken);
+                        // Host is now active, launch group chat using the roomId
+                        ChatUtil.launchGroupChat(GroupsActivity.this, roomId, hostToken); // **MODIFIED**
                         Toast.makeText(GroupsActivity.this, "Joining as Host", Toast.LENGTH_SHORT).show();
                     } else {
                         Toast.makeText(GroupsActivity.this, "Failed to set host active status", Toast.LENGTH_SHORT).show();
@@ -722,22 +759,60 @@ public class GroupsActivity extends AppCompatActivity implements GroupsAdapter.O
             @Override
             public void onError(String errorMessage) {
                 hideProgressDialog();
-                // Even if active status fails, still try to open group chat
-                ChatUtil.launchGroupChat(GroupsActivity.this, groupName, hostToken);
+                // Even if active status fails, still try to open group chat using the roomId
+                ChatUtil.launchGroupChat(GroupsActivity.this, roomId, hostToken); // **MODIFIED**
                 Toast.makeText(GroupsActivity.this, "Joining as Host (active status failed)", Toast.LENGTH_SHORT).show();
             }
         });
     }
+//    private void setUserActiveStatusForGroup(String userId, String userToken, String groupName, String username) {
+//        apiService.setActiveStatus(userId, true, new ApiCallback<JSONObject>() {
+//            @Override
+//            public void onSuccess(JSONObject response) {
+//                hideProgressDialog();
+//                try {
+//                    if (response.getBoolean("success")) {
+//                        // User is now active, launch group chat
+//                        ChatUtil.launchGroupChat(GroupsActivity.this, groupName, userToken);
+//                        Toast.makeText(GroupsActivity.this, "Joining as " + username, Toast.LENGTH_SHORT).show();
+//                    } else {
+//                        Toast.makeText(GroupsActivity.this, "Failed to set active status for " + username, Toast.LENGTH_SHORT).show();
+//                    }
+//                } catch (Exception e) {
+//                    Toast.makeText(GroupsActivity.this, "Error setting active status: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+//                }
+//            }
+//
+//            @Override
+//            public void onError(String errorMessage) {
+//                hideProgressDialog();
+//                // Even if active status fails, still try to open group chat
+//                ChatUtil.launchGroupChat(GroupsActivity.this, groupName, userToken);
+//                Toast.makeText(GroupsActivity.this, "Joining as " + username + " (active status failed)", Toast.LENGTH_SHORT).show();
+//            }
+//        });
+//    }
+// Inside GroupsActivity.java
 
     private void setUserActiveStatusForGroup(String userId, String userToken, String groupName, String username) {
+        // 1. Get the Group object to find the roomId
+        Group group = databaseHelper.getGroupByName(groupName); // Assuming getGroupByName exists or using getGroupById
+
+        if (group == null || group.getRoomId() == null) {
+            hideProgressDialog();
+            Toast.makeText(GroupsActivity.this, "Error: Group room ID not found for " + groupName, Toast.LENGTH_LONG).show();
+            return;
+        }
+        final String roomId = group.getRoomId();
+
         apiService.setActiveStatus(userId, true, new ApiCallback<JSONObject>() {
             @Override
             public void onSuccess(JSONObject response) {
                 hideProgressDialog();
                 try {
                     if (response.getBoolean("success")) {
-                        // User is now active, launch group chat
-                        ChatUtil.launchGroupChat(GroupsActivity.this, groupName, userToken);
+                        // User is now active, launch group chat using the roomId
+                        ChatUtil.launchGroupChat(GroupsActivity.this, roomId, userToken); // **MODIFIED**
                         Toast.makeText(GroupsActivity.this, "Joining as " + username, Toast.LENGTH_SHORT).show();
                     } else {
                         Toast.makeText(GroupsActivity.this, "Failed to set active status for " + username, Toast.LENGTH_SHORT).show();
@@ -750,13 +825,12 @@ public class GroupsActivity extends AppCompatActivity implements GroupsAdapter.O
             @Override
             public void onError(String errorMessage) {
                 hideProgressDialog();
-                // Even if active status fails, still try to open group chat
-                ChatUtil.launchGroupChat(GroupsActivity.this, groupName, userToken);
+                // Even if active status fails, still try to open group chat using the roomId
+                ChatUtil.launchGroupChat(GroupsActivity.this, roomId, userToken); // **MODIFIED**
                 Toast.makeText(GroupsActivity.this, "Joining as " + username + " (active status failed)", Toast.LENGTH_SHORT).show();
             }
         });
     }
-
     private void showProgressDialog(String message) {
         if (progressDialog != null && progressDialog.isShowing()) {
             progressDialog.dismiss();

@@ -592,7 +592,7 @@ public class ApiService {
         try {
             requestBody.put("host_id", hostId);
             requestBody.put("host_token", hostToken);
-            requestBody.put("guest_list", new JSONArray(guestList));
+            requestBody.put("guest_room_id_list", new JSONArray(guestList));
             requestBody.put("channel_id", channelId);
         } catch (JSONException e) {
             callback.onError("Error creating request: " + e.getMessage());
